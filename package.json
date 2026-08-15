@@ -1,0 +1,65 @@
+{
+  "name": "amazing-multicodex",
+  "displayName": "Amazing MultiCodex",
+  "description": "A control plane for coordinating multiple Codex sessions inside VS Code.",
+  "version": "0.1.0",
+  "publisher": "amazing-multicodex",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "activationEvents": [
+    "onView:amazingMultiCodex.tasks",
+    "onCommand:amazingMultiCodex.createTask"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "amazingMultiCodex.tasks",
+          "name": "MultiCodex Tasks",
+          "when": "true"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "amazingMultiCodex.createTask",
+        "title": "MultiCodex: Create Task"
+      },
+      {
+        "command": "amazingMultiCodex.refreshTasks",
+        "title": "MultiCodex: Refresh Tasks"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "amazingMultiCodex.createTask",
+          "when": "view == amazingMultiCodex.tasks",
+          "group": "navigation"
+        },
+        {
+          "command": "amazingMultiCodex.refreshTasks",
+          "when": "view == amazingMultiCodex.tasks",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "check": "tsc --noEmit -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.6.0"
+  }
+}
