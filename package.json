@@ -55,7 +55,8 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "check": "tsc --noEmit -p ./"
+    "check": "tsc --noEmit -p ./",
+    "test": "npm run compile && node --test out/**/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

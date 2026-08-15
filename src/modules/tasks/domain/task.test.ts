@@ -1,0 +1,32 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { Task, TaskId } from "./task";
+
+const now = new Date("2026-08-15T12:00:00.000Z");
+
+test("creates a normalized draft task", () => {
+  const result = Task.create({ id: "task-1" as TaskId, title: "  Build it  ", now });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.snapshot().title, "Build it");
+  assert.equal(result.value.snapshot().status, "draft");
+});
+
+test("rejects invalid task transitions", () => {
+  const result = Task.create({ id: "task-1" as TaskId, title: "Build it", now });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const transition = result.value.transition("completed", now);
+  assert.equal(transition.ok, false);
+  if (transition.ok) return;
+  assert.equal(transition.error.code, "task.invalid-transition");
+});
+
+test("increments version for valid transitions", () => {
+  const result = Task.create({ id: "task-1" as TaskId, title: "Build it", now });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.transition("queued", now).ok, true);
+  assert.equal(result.value.snapshot().version, 1);
+});
+
