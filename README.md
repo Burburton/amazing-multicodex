@@ -2,6 +2,10 @@
 
 An orchestration control plane for running and reviewing multiple Codex tasks inside VS Code.
 
+The project is being rebuilt around a modular, adapter-driven architecture. See
+[the architecture baseline](docs/architecture.md) for module boundaries,
+dependency rules, runtime design, and delivery slices.
+
 ## Current status
 
 This repository starts with the control-plane foundation:
