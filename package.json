@@ -5,6 +5,10 @@
   "version": "0.1.0",
   "publisher": "amazing-multicodex",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Burburton/amazing-multicodex.git"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -56,11 +60,13 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "check": "tsc --noEmit -p ./",
-    "test": "npm run compile && node --test out/**/*.test.js"
+    "test": "npm run compile && node --test out/**/*.test.js",
+    "package": "npm run compile && vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.9.2",
     "typescript": "^5.6.0"
   }
 }
