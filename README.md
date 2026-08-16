@@ -22,10 +22,14 @@ The extension currently provides the core multi-task execution loop:
 - draft-first task creation so dependencies can be configured before dispatch;
 - complete worktree diff review, including committed and untracked changes;
 - explicit merge or squash integration into a clean target repository;
-- immutable reviewed-commit integration and explicit clean-worktree release;
+- integration bound to the exact reviewed patch, with repository identity and
+  output-truncation safety checks;
+- explicit clean-worktree release;
 - credential redaction before activity records are persisted;
-- a read-only task-detail webview for criteria, dependencies, execution, and activity;
+- a reusable, action-enabled task-detail webview that refreshes after commands
+  and when revealed;
 - startup reconciliation for interrupted preparation and missing worktrees;
+- bounded validation runtime, activity memory, and persisted activity size;
 - automated module-boundary checks, unit/contract tests, and VSIX packaging.
 
 Codex remains responsible for reasoning and code changes. This extension owns
@@ -43,10 +47,10 @@ Task board → scheduler → Codex session adapter → isolated worktree
 
 Next milestones:
 
-1. Add validated task actions and live refresh to the detail webview.
-2. Add SQLite migrations and Codex thread reconciliation after reconnect.
-3. Add conflict-resolution and explicit retained-branch cleanup workflows.
-4. Add protocol-generation compatibility checks across supported Codex versions.
+1. Add SQLite migrations and a transactional outbox.
+2. Add live Codex thread-state reconciliation after reconnect.
+3. Add guided conflict resolution and explicit retained-branch cleanup workflows.
+4. Add protocol fixture compatibility checks across supported Codex versions.
 
 ## Development
 
