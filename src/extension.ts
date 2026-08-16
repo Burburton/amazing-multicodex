@@ -24,6 +24,7 @@ import {
   ResumeTaskWorkflow,
   SchedulerPolicy,
   StartTaskWorkflow,
+  TaskDetailQuery,
   ValidateTaskWorkflow
 } from "./modules/orchestration/public";
 import {
@@ -41,6 +42,7 @@ import {
 import { SystemClock } from "./shared/core/clock";
 import { CryptoIdGenerator } from "./shared/core/idGenerator";
 import { TaskTreeProvider } from "./ui/taskTreeProvider";
+import { showTaskDetailPanel } from "./ui/taskDetailPanel";
 
 export function activate(context: vscode.ExtensionContext): void {
   const repository = new MementoTaskRepository(context.workspaceState);
@@ -272,6 +274,18 @@ export function activate(context: vscode.ExtensionContext): void {
         description: record.kind,
         detail: record.detail
       })), { title: `Activity: ${task.title}`, matchOnDetail: true });
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.showTaskDetails", async (task?: TaskProps) => {
+      if (!task) {
+        void vscode.window.showErrorMessage("Select a MultiCodex task to view its details.");
+        return;
+      }
+      const detail = await new TaskDetailQuery(lifecycle, dependencies, executions, activity).execute(task.id);
+      if (!detail.ok) {
+        void vscode.window.showErrorMessage(detail.error.message);
+        return;
+      }
+      showTaskDetailPanel(detail.value);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.cancelTask", async (task?: TaskProps) => {
       if (!task) {

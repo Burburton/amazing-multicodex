@@ -12,6 +12,8 @@ export { ReleaseTaskWorkspaceWorkflow } from "./application/releaseTaskWorkspace
 export { ValidateTaskWorkflow } from "./application/validateTaskWorkflow";
 export type { ValidateTaskWorkflowCommand } from "./application/validateTaskWorkflow";
 export { AgentEventCoordinator } from "./application/agentEventCoordinator";
+export { TaskDetailQuery } from "./application/taskDetailQuery";
+export type { TaskDetailProjection, TaskPrerequisiteSummary } from "./application/taskDetailQuery";
 export type { CoordinatorDiagnostics } from "./application/agentEventCoordinator";
 export type {
   ExecutionRepository,

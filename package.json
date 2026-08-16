@@ -25,6 +25,7 @@
     "onCommand:amazingMultiCodex.startTask",
     "onCommand:amazingMultiCodex.resumeTask",
     "onCommand:amazingMultiCodex.showActivity",
+    "onCommand:amazingMultiCodex.showTaskDetails",
     "onCommand:amazingMultiCodex.cancelTask",
     "onCommand:amazingMultiCodex.validateTask",
     "onCommand:amazingMultiCodex.showChanges",
@@ -145,6 +146,11 @@
         "icon": "$(history)"
       },
       {
+        "command": "amazingMultiCodex.showTaskDetails",
+        "title": "MultiCodex: Show Task Details",
+        "icon": "$(preview)"
+      },
+      {
         "command": "amazingMultiCodex.cancelTask",
         "title": "MultiCodex: Cancel Task",
         "icon": "$(stop-circle)"
@@ -204,6 +210,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "amazingMultiCodex.showTaskDetails",
+          "when": "view == amazingMultiCodex.tasks",
+          "group": "navigation@1"
+        },
         {
           "command": "amazingMultiCodex.queueTask",
           "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.draft || viewItem == multicodexTask.failed || viewItem == multicodexTask.cancelled || viewItem == multicodexTask.blocked)",

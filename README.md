@@ -23,6 +23,7 @@ The extension currently provides the core multi-task execution loop:
 - explicit merge or squash integration into a clean target repository;
 - immutable reviewed-commit integration and explicit clean-worktree release;
 - credential redaction before activity records are persisted;
+- a read-only task-detail webview for criteria, dependencies, execution, and activity;
 - automated module-boundary checks, unit/contract tests, and VSIX packaging.
 
 Codex remains responsible for reasoning and code changes. This extension owns
@@ -40,7 +41,7 @@ Task board → scheduler → Codex session adapter → isolated worktree
 
 Next milestones:
 
-1. Replace quick-pick activity with a task-detail webview.
+1. Add validated task actions and live refresh to the detail webview.
 2. Add SQLite migrations and full restart reconciliation.
 3. Add conflict-resolution and explicit retained-branch cleanup workflows.
 4. Add protocol-generation compatibility checks across supported Codex versions.
