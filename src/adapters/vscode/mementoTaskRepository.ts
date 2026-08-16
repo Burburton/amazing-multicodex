@@ -70,6 +70,8 @@ function isStoredTask(value: unknown): value is StoredTask {
   const task = value as Record<string, unknown>;
   return typeof task.id === "string" && task.id.length > 0
     && typeof task.title === "string"
+    && (task.description === undefined || typeof task.description === "string")
+    && (task.statusReason === undefined || typeof task.statusReason === "string")
     && Array.isArray(task.acceptanceCriteria) && task.acceptanceCriteria.every(item => typeof item === "string")
     && typeof task.priority === "string" && priorities.has(task.priority)
     && typeof task.status === "string" && statuses.has(task.status)
