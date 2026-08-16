@@ -97,7 +97,12 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showErrorMessage(detail.error.message);
       return undefined;
     },
-    async (action, task) => { await vscode.commands.executeCommand(detailCommands[action], task); }
+    async (action, task) => { await vscode.commands.executeCommand(detailCommands[action], task); },
+    (message, cause) => {
+      console.error(message, cause);
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      void vscode.window.showErrorMessage(`${message} ${detail}`);
+    }
   );
   let coordinator: AgentEventCoordinator | undefined;
   let activityBridge: AgentActivityBridge | undefined;
