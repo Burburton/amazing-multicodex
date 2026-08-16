@@ -1,6 +1,7 @@
 import { Clock } from "../../../shared/core/clock";
 import { IdGenerator } from "../../../shared/core/idGenerator";
 import { AppError, Result, err } from "../../../shared/core/result";
+import { redactSensitiveData, redactSensitiveText } from "../../../shared/core/sensitiveData";
 import { AgentApprovalRequest } from "../../agents/public";
 import { TaskId } from "../../tasks/public";
 import { Approval, ApprovalId, ApprovalProps, ApprovalRisk, ApprovalStatus } from "../domain/approval";
@@ -36,9 +37,9 @@ export class ApprovalService {
       threadId: command.request.threadId,
       turnId: command.request.turnId,
       risk: command.risk,
-      title: command.title,
-      detail: command.detail,
-      payload: command.request.payload,
+      title: redactSensitiveText(command.title),
+      detail: command.detail ? redactSensitiveText(command.detail) : undefined,
+      payload: redactSensitiveData(command.request.payload),
       now: this.clock.now()
     });
     if (!created.ok) return created;
@@ -70,4 +71,3 @@ function notFound(id: ApprovalId): AppError {
     context: { id }
   };
 }
-

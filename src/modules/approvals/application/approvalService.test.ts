@@ -35,3 +35,31 @@ test("captures and decides an approval through repository ports", async () => {
   assert.equal(pending.ok && pending.value.length, 0);
 });
 
+test("redacts nested approval secrets before persistence", async () => {
+  const repository = new InMemoryApprovalRepository();
+  const service = new ApprovalService(repository, new FixedClock(), new FixedIds());
+  const captured = await service.capture({
+    taskId: "task-1" as TaskId,
+    request: {
+      requestId: "runtime-1",
+      method: "approval",
+      payload: {
+        password: "correct horse battery staple",
+        command: "curl -H 'Authorization: Bearer secret-token-value' example.com",
+        nested: { apiKey: "not-safe" }
+      }
+    },
+    risk: "execute",
+    title: "Run a command",
+    detail: "OPENAI_API_KEY=sk-example1234567890"
+  });
+
+  assert.equal(captured.ok, true);
+  if (!captured.ok) return;
+  assert.equal(captured.value.detail?.includes("sk-example"), false);
+  assert.deepEqual(captured.value.payload, {
+    password: "[REDACTED]",
+    command: "curl -H 'Authorization: Bearer [REDACTED] example.com",
+    nested: { apiKey: "[REDACTED]" }
+  });
+});
