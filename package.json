@@ -42,6 +42,11 @@
           "default": "codex",
           "description": "Codex CLI executable used to start App Server."
         },
+        "amazingMultiCodex.defaultModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional model override for newly started tasks. Empty uses the Codex default."
+        },
         "amazingMultiCodex.requestTimeoutMs": {
           "type": "integer",
           "default": 30000,

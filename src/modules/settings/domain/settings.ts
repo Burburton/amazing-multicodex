@@ -2,6 +2,7 @@ import { AppError, Result, err, ok } from "../../../shared/core/result";
 
 export interface MultiCodexSettings {
   readonly codexExecutable: string;
+  readonly defaultModel?: string;
   readonly requestTimeoutMs: number;
   readonly baseRef: string;
   readonly concurrencyLimit: number;
@@ -31,6 +32,7 @@ export const defaultSettings: MultiCodexSettings = {
 export function parseSettings(input: SettingsInput): Result<MultiCodexSettings> {
   const value: MultiCodexSettings = {
     codexExecutable: input.codexExecutable ?? defaultSettings.codexExecutable,
+    defaultModel: input.defaultModel?.trim() || undefined,
     requestTimeoutMs: input.requestTimeoutMs ?? defaultSettings.requestTimeoutMs,
     baseRef: input.baseRef ?? defaultSettings.baseRef,
     concurrencyLimit: input.concurrencyLimit ?? defaultSettings.concurrencyLimit,

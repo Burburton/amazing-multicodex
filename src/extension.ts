@@ -174,7 +174,8 @@ export function activate(context: vscode.ExtensionContext): void {
             repositoryRoot: workspaceFolder.uri.fsPath,
             worktreeRoot: vscode.Uri.joinPath(storage, "worktrees").fsPath,
             baseRef: settings.value.baseRef,
-            concurrencyLimit: settings.value.concurrencyLimit
+            concurrencyLimit: settings.value.concurrencyLimit,
+            model: settings.value.defaultModel
           });
           tree.refresh();
           if (!dispatched.ok) {
@@ -240,7 +241,8 @@ export function activate(context: vscode.ExtensionContext): void {
             repositoryRoot: workspaceFolder.uri.fsPath,
             worktreeRoot: vscode.Uri.joinPath(storage, "worktrees").fsPath,
             baseRef: settings.value.baseRef,
-            concurrencyLimit: settings.value.concurrencyLimit
+            concurrencyLimit: settings.value.concurrencyLimit,
+            model: settings.value.defaultModel
           });
           tree.refresh();
           if (!started.ok) {
@@ -561,6 +563,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const config = vscode.workspace.getConfiguration("amazingMultiCodex");
     return parseSettings({
       codexExecutable: config.get<string>("codexExecutable"),
+      defaultModel: config.get<string>("defaultModel"),
       requestTimeoutMs: config.get<number>("requestTimeoutMs"),
       baseRef: config.get<string>("baseRef"),
       concurrencyLimit: config.get<number>("concurrencyLimit"),
