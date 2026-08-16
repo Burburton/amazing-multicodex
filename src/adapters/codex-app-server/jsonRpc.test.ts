@@ -41,6 +41,15 @@ test("dispatches notifications and supports unsubscription", () => {
   assert.deepEqual(received, [{ id: "turn-1" }]);
 });
 
+test("isolates notification subscribers from each other", () => {
+  const peer = new JsonRpcPeer(new RecordingTransport());
+  const received: unknown[] = [];
+  peer.onNotification("turn/started", () => { throw new Error("observer failed"); });
+  peer.onNotification("turn/started", params => received.push(params));
+  peer.receive({ method: "turn/started", params: { id: "turn-1" } });
+  assert.deepEqual(received, [{ id: "turn-1" }]);
+});
+
 test("answers supported and unsupported server requests", async () => {
   const transport = new RecordingTransport();
   const peer = new JsonRpcPeer(transport);

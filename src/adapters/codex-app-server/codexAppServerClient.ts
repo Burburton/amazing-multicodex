@@ -197,7 +197,13 @@ export class CodexAppServerClient implements AgentRuntimePort {
   }
 
   private publish(event: AgentRuntimeEvent): void {
-    for (const listener of this.listeners) listener(event);
+    for (const listener of this.listeners) {
+      try {
+        listener(event);
+      } catch {
+        // Runtime event observers are independent projections.
+      }
+    }
   }
 
   private async handleApproval(method: string, params: unknown): Promise<unknown> {

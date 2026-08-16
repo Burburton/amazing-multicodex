@@ -82,6 +82,19 @@ test("normalizes streamed notifications", async () => {
   assert.equal(events[1].type, "turnCompleted");
 });
 
+test("isolates runtime event subscribers from each other", async () => {
+  const { client, peer } = await initializedClient();
+  const events: AgentRuntimeEvent[] = [];
+  client.subscribe(() => { throw new Error("projection failed"); });
+  client.subscribe(event => events.push(event));
+  peer.receive({
+    method: "turn/started",
+    params: { threadId: "thread-1", turn: { id: "turn-1" } }
+  });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "turnStarted");
+});
+
 test("bridges server approval requests to the registered handler", async () => {
   const { client, peer, transport } = await initializedClient();
   client.handleApprovals(async request => ({ decision: request.method === "item/fileChange/requestApproval" ? "accept" : "decline" }));

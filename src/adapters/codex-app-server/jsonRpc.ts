@@ -111,7 +111,11 @@ export class JsonRpcPeer {
       return;
     }
     for (const handler of this.notificationHandlers.get(message.method) ?? []) {
-      handler(message.params);
+      try {
+        handler(message.params);
+      } catch {
+        // Notification consumers are isolated so one observer cannot block others.
+      }
     }
   }
 
