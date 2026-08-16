@@ -71,8 +71,14 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   const ids = new CryptoIdGenerator();
   const codex = new CodexProcessSupervisor(new NodeProcessFactory(), {
-    malformedProtocolLine: line => console.warn("MultiCodex ignored malformed Codex output", line),
-    stderr: chunk => console.warn("Codex App Server:", chunk.trimEnd()),
+    malformedProtocolLine: line => console.warn(
+      "MultiCodex ignored malformed Codex output",
+      redactAndTruncateSensitiveText(line, 2_000)
+    ),
+    stderr: chunk => console.warn(
+      "Codex App Server:",
+      redactAndTruncateSensitiveText(chunk.trimEnd(), 2_000)
+    ),
     exited: exit => {
       reportRuntimeDisconnect(`Codex App Server exited with code ${String(exit.code)}.`);
       console.info("Codex App Server exited", exit);

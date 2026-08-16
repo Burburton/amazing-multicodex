@@ -31,7 +31,7 @@ export class AgentActivityBridge {
   }
 
   private async handle(event: AgentRuntimeEvent): Promise<void> {
-    const key = `${event.threadId}:${event.turnId}`;
+    const key = JSON.stringify([event.threadId, event.turnId]);
     if (event.type === "agentMessageDelta") {
       const current = this.messageBuffers.get(key) ?? "";
       if (!current && !this.messageBuffers.has(key) && this.messageBuffers.size >= this.maxBufferedTurns) {

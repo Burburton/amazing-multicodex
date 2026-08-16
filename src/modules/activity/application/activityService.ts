@@ -26,7 +26,7 @@ export class ActivityService {
       taskId: command.taskId,
       kind: command.kind,
       summary: redactAndTruncateSensitiveText(command.summary.trim(), 500),
-      detail: command.detail ? redactAndTruncateSensitiveText(command.detail.trim(), 32_000) || undefined : undefined,
+      detail: command.detail ? redactAndTruncateSensitiveText(command.detail.trim(), 200_000) || undefined : undefined,
       occurredAt: this.clock.now()
     });
   }
