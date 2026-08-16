@@ -38,7 +38,7 @@ export class RunValidationHandler {
       if (!result.ok) throw new Error("Unreachable failed validation result.");
       return result.value;
     });
-    const status = results.some(result => result.status === "cancelled")
+    const status = command.signal?.aborted || results.some(result => result.status === "cancelled")
       ? "cancelled"
       : results.some(result => result.status === "failed") ? "failed" : "passed";
     return ok({
@@ -114,4 +114,3 @@ function commandError(check: ValidationCheckDefinition, cause: unknown): AppErro
     cause
   };
 }
-

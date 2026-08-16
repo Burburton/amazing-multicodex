@@ -66,3 +66,15 @@ test("runs all checks for a parallel profile", async () => {
   assert.equal(commands.calls[0].cwd, workspace.path);
 });
 
+test("reports a pre-cancelled sequential run as cancelled without executing checks", async () => {
+  const commands = new FakeCommands();
+  const controller = new AbortController();
+  controller.abort();
+  const validation = await new RunValidationHandler(commands, new SteppingClock(), new FixedIds())
+    .execute({ workspace, profile: profile("sequential"), signal: controller.signal });
+  assert.equal(validation.ok, true);
+  if (!validation.ok) return;
+  assert.equal(validation.value.status, "cancelled");
+  assert.equal(validation.value.checks.length, 0);
+  assert.equal(commands.calls.length, 0);
+});
