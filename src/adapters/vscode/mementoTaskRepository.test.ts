@@ -6,6 +6,7 @@ import { MementoTaskRepository } from "./mementoTaskRepository";
 
 class FakeState implements KeyValueState {
   private readonly values = new Map<string, unknown>();
+  constructor(value?: unknown) { if (value !== undefined) this.values.set("amazingMultiCodex.tasks.v2", value); }
   get<T>(key: string, defaultValue: T): T { return (this.values.get(key) as T | undefined) ?? defaultValue; }
   update(key: string, value: unknown): Thenable<void> { this.values.set(key, value); return Promise.resolve(); }
 }
@@ -25,4 +26,11 @@ test("round-trips tasks without leaking serialized date representation", async (
   if (!found.ok || !found.value) return;
   assert.equal(found.value.snapshot().createdAt instanceof Date, true);
   assert.equal(found.value.snapshot().title, "Persist me");
+});
+
+test("returns a typed error for malformed stored task state", async () => {
+  const repository = new MementoTaskRepository(new FakeState([{ id: "task-1", title: "Incomplete" }]));
+  const listed = await repository.list();
+  assert.equal(listed.ok, false);
+  if (!listed.ok) assert.equal(listed.error.code, "task.state-invalid");
 });
