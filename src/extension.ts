@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { CodexProcessSupervisor } from "./adapters/codex-app-server/codexProcessSupervisor";
 import { GitWorkspaceAdapter } from "./adapters/git-cli/gitWorkspaceAdapter";
+import { GitIntegrationAdapter } from "./adapters/git-cli/gitIntegrationAdapter";
 import { NodeCommandRunner } from "./adapters/process/nodeCommandRunner";
 import { NodeProcessFactory } from "./adapters/process/nodeProcessFactory";
 import { MementoActivityRepository } from "./adapters/vscode/mementoActivityRepository";
@@ -11,6 +12,7 @@ import { AgentActivityBridge } from "./host/agentActivityBridge";
 import { ApprovalBridge } from "./host/approvalBridge";
 import { ActivityService } from "./modules/activity/public";
 import { ApprovalService } from "./modules/approvals/public";
+import { IntegrateTaskWorkflow, IntegrationStrategy } from "./modules/integration/public";
 import { ValidationCommandSetting, parseSettings } from "./modules/settings/public";
 import {
   AgentEventCoordinator,
@@ -313,6 +315,50 @@ export function activate(context: vscode.ExtensionContext): void {
         content: changes.value.patch || "No committed changes relative to the task base ref."
       });
       await vscode.window.showTextDocument(document, { preview: true });
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.integrateTask", async (task?: TaskProps) => {
+      if (!task) {
+        void vscode.window.showErrorMessage("Select a reviewed MultiCodex task to integrate.");
+        return;
+      }
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder || workspaceFolder.uri.scheme !== "file") {
+        void vscode.window.showErrorMessage("Open the target local Git workspace before integrating.");
+        return;
+      }
+      const selection = await vscode.window.showQuickPick([
+        { label: "Merge commit", strategy: "merge" as IntegrationStrategy },
+        { label: "Squash commit", strategy: "squash" as IntegrationStrategy }
+      ], { title: `Integration strategy: ${task.title}` });
+      if (!selection) return;
+      const confirmed = await vscode.window.showWarningMessage(
+        `Integrate '${task.title}' into the currently checked-out target branch using ${selection.label}?`,
+        { modal: true },
+        "Integrate"
+      );
+      if (confirmed !== "Integrate") return;
+      const integrated = await new IntegrateTaskWorkflow(
+        lifecycle,
+        executions,
+        new GitIntegrationAdapter(new NodeCommandRunner())
+      ).execute({
+        taskId: task.id,
+        targetRepositoryRoot: workspaceFolder.uri.fsPath,
+        strategy: selection.strategy,
+        commitMessage: `MultiCodex: ${task.title}`
+      });
+      tree.refresh();
+      if (!integrated.ok) {
+        void vscode.window.showErrorMessage(integrated.error.message);
+        return;
+      }
+      await activity.record({
+        taskId: task.id,
+        kind: "lifecycle",
+        summary: `Integrated with ${integrated.value.strategy}`,
+        detail: integrated.value.targetCommit
+      });
+      void vscode.window.showInformationMessage(`Integrated MultiCodex task: ${task.title}`);
     })
   );
 
