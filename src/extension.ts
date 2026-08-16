@@ -47,6 +47,7 @@ import { SystemClock } from "./shared/core/clock";
 import { CryptoIdGenerator } from "./shared/core/idGenerator";
 import { TaskTreeProvider } from "./ui/taskTreeProvider";
 import { TaskDetailPanelManager, TaskDetailAction } from "./ui/taskDetailPanel";
+import { sortTasksForDisplay, taskPriorityLabel, taskStatusLabel } from "./ui/taskPresentation";
 
 export function activate(context: vscode.ExtensionContext): void {
   const repository = new MementoTaskRepository(context.workspaceState);
@@ -217,10 +218,9 @@ export function activate(context: vscode.ExtensionContext): void {
       });
     }),
     vscode.commands.registerCommand("amazingMultiCodex.queueTask", async (task?: TaskProps) => {
-      if (!task) {
-        void vscode.window.showErrorMessage("Select a draft, failed, cancelled, or blocked task to queue.");
-        return;
-      }
+      task = await selectTask(task, candidate => ["draft", "failed", "cancelled", "blocked"].includes(candidate.status)
+        && !candidate.statusReason?.startsWith("integration."), "Queue or retry a task");
+      if (!task) return;
       if (task.status === "blocked" && task.statusReason?.startsWith("integration.")) {
         void vscode.window.showErrorMessage("Retry this task with the Integrate Task command.");
         return;
@@ -242,10 +242,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }, () => dispatchQueue(true));
     }),
     vscode.commands.registerCommand("amazingMultiCodex.startTask", async (task?: TaskProps) => {
-      if (!task) {
-        void vscode.window.showErrorMessage("Select a queued MultiCodex task to start.");
-        return;
-      }
+      task = await selectTask(task, candidate => candidate.status === "queued", "Start a queued task");
+      if (!task) return;
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
       if (!workspaceFolder || workspaceFolder.uri.scheme !== "file") {
         void vscode.window.showErrorMessage("Open a local Git workspace before starting a task.");
@@ -306,10 +304,8 @@ export function activate(context: vscode.ExtensionContext): void {
       });
     }),
     vscode.commands.registerCommand("amazingMultiCodex.resumeTask", async (task?: TaskProps) => {
-      if (!task) {
-        void vscode.window.showErrorMessage("Select a running MultiCodex task to resume.");
-        return;
-      }
+      task = await selectTask(task, candidate => candidate.status === "running", "Resume a running task");
+      if (!task) return;
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
       if (!workspaceFolder || workspaceFolder.uri.scheme !== "file") {
         void vscode.window.showErrorMessage("Open the task's local Git workspace before resuming.");
@@ -340,10 +336,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
     vscode.commands.registerCommand("amazingMultiCodex.showActivity", async (task?: TaskProps) => {
-      if (!task) {
-        void vscode.window.showErrorMessage("Select a MultiCodex task to view its activity.");
-        return;
-      }
+      task = await selectTask(task, () => true, "Show task activity");
+      if (!task) return;
       const records = await activity.list(task.id);
       if (!records.ok) {
         void vscode.window.showErrorMessage(records.error.message);
@@ -360,17 +354,13 @@ export function activate(context: vscode.ExtensionContext): void {
       })), { title: `Activity: ${task.title}`, matchOnDetail: true });
     }),
     vscode.commands.registerCommand("amazingMultiCodex.showTaskDetails", async (task?: TaskProps) => {
-      if (!task) {
-        void vscode.window.showErrorMessage("Select a MultiCodex task to view its details.");
-        return;
-      }
+      task = await selectTask(task, () => true, "Open task details");
+      if (!task) return;
       await taskDetails.show(task.id);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.cancelTask", async (task?: TaskProps) => {
-      if (!task) {
-        void vscode.window.showErrorMessage("Select a running MultiCodex task to cancel.");
-        return;
-      }
+      task = await selectTask(task, candidate => ["running", "awaitingApproval"].includes(candidate.status), "Cancel a running task");
+      if (!task) return;
       const confirmed = await vscode.window.showWarningMessage(
         `Cancel MultiCodex task '${task.title}'?${codex.current() ? "" : " Codex is disconnected, so only local execution state will be abandoned."}`,
         { modal: true },
@@ -386,10 +376,8 @@ export function activate(context: vscode.ExtensionContext): void {
       else void dispatchQueue(false);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.validateTask", async (task?: TaskProps) => {
-      if (!task) {
-        void vscode.window.showErrorMessage("Select a task waiting for validation.");
-        return;
-      }
+      task = await selectTask(task, candidate => candidate.status === "validating", "Validate a completed Codex task");
+      if (!task) return;
       const settings = readSettings();
       if (!settings.ok) {
         void vscode.window.showErrorMessage(settings.error.message);
@@ -445,10 +433,8 @@ export function activate(context: vscode.ExtensionContext): void {
         : `Validation ${result.value.status}: ${task.title}`);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.showChanges", async (task?: TaskProps) => {
-      if (!task) {
-        void vscode.window.showErrorMessage("Select a MultiCodex task to inspect its changes.");
-        return;
-      }
+      task = await selectTask(task, candidate => ["validating", "readyForReview", "completed", "failed"].includes(candidate.status), "Inspect task changes");
+      if (!task) return;
       const execution = await executions.findLatestByTask(task.id);
       if (!execution.ok || !execution.value) {
         void vscode.window.showErrorMessage(execution.ok ? "No execution was found for this task." : execution.error.message);
@@ -466,10 +452,9 @@ export function activate(context: vscode.ExtensionContext): void {
       await vscode.window.showTextDocument(document, { preview: true });
     }),
     vscode.commands.registerCommand("amazingMultiCodex.integrateTask", async (task?: TaskProps) => {
-      if (!task) {
-        void vscode.window.showErrorMessage("Select a reviewed MultiCodex task to integrate.");
-        return;
-      }
+      task = await selectTask(task, candidate => candidate.status === "readyForReview"
+        || (candidate.status === "blocked" && !!candidate.statusReason?.startsWith("integration.")), "Integrate a reviewed task");
+      if (!task) return;
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
       if (!workspaceFolder || workspaceFolder.uri.scheme !== "file") {
         void vscode.window.showErrorMessage("Open the target local Git workspace before integrating.");
@@ -535,10 +520,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
     vscode.commands.registerCommand("amazingMultiCodex.recoverIntegration", async (task?: TaskProps) => {
-      if (!task) {
-        void vscode.window.showErrorMessage("Select a task left in the integrating state.");
-        return;
-      }
+      task = await selectTask(task, candidate => candidate.status === "integrating", "Recover an interrupted integration");
+      if (!task) return;
       const selection = await vscode.window.showWarningMessage(
         `Verify the target Git history for '${task.title}', then choose how to recover its interrupted integration state.`,
         { modal: true },
@@ -563,10 +546,8 @@ export function activate(context: vscode.ExtensionContext): void {
       });
     }),
     vscode.commands.registerCommand("amazingMultiCodex.addDependency", async (task?: TaskProps) => {
-      if (!task) {
-        void vscode.window.showErrorMessage("Select a MultiCodex task to add a prerequisite.");
-        return;
-      }
+      task = await selectTask(task, candidate => candidate.status === "draft", "Add a task prerequisite");
+      if (!task) return;
       const listed = await repository.list();
       if (!listed.ok) {
         void vscode.window.showErrorMessage(listed.error.message);
@@ -593,10 +574,8 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showInformationMessage(`Added prerequisite '${selected.label}' to '${task.title}'.`);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.removeDependency", async (task?: TaskProps) => {
-      if (!task) {
-        void vscode.window.showErrorMessage("Select a MultiCodex task to remove a prerequisite.");
-        return;
-      }
+      task = await selectTask(task, candidate => candidate.status === "draft", "Remove a task prerequisite");
+      if (!task) return;
       const [edges, listed] = await Promise.all([dependencies.listFor(task.id), repository.list()]);
       if (!edges.ok) {
         void vscode.window.showErrorMessage(edges.error.message);
@@ -628,10 +607,8 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showInformationMessage(`Removed prerequisite '${selected.label}' from '${task.title}'.`);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.releaseWorkspace", async (task?: TaskProps) => {
-      if (!task) {
-        void vscode.window.showErrorMessage("Select a completed or cancelled task workspace to release.");
-        return;
-      }
+      task = await selectTask(task, candidate => ["completed", "cancelled"].includes(candidate.status), "Release a task worktree");
+      if (!task) return;
       const confirmed = await vscode.window.showWarningMessage(
         `Remove the clean Git worktree for '${task.title}'? The task history and branch are retained.`,
         { modal: true }, "Remove Worktree"
@@ -765,6 +742,37 @@ export function activate(context: vscode.ExtensionContext): void {
         void taskDetails.refresh(taskId);
       }
     });
+  }
+
+  async function selectTask(
+    provided: TaskProps | undefined,
+    eligible: (task: TaskProps) => boolean,
+    title: string
+  ): Promise<TaskProps | undefined> {
+    if (provided) return provided;
+    const listed = await repository.list();
+    if (!listed.ok) {
+      void vscode.window.showErrorMessage(listed.error.message);
+      return undefined;
+    }
+    const candidates = sortTasksForDisplay(
+      listed.value.map(task => task.snapshot()).filter(eligible)
+    );
+    if (candidates.length === 0) {
+      void vscode.window.showInformationMessage(`No eligible MultiCodex tasks are available for: ${title}.`);
+      return undefined;
+    }
+    const selected = await vscode.window.showQuickPick(candidates.map(task => ({
+      label: task.title,
+      description: `${taskStatusLabel(task.status)} · ${taskPriorityLabel(task.priority)}`,
+      detail: task.statusReason ?? task.description,
+      task
+    })), {
+      title,
+      matchOnDescription: true,
+      matchOnDetail: true
+    });
+    return selected?.task;
   }
 
   function readSettings(): ReturnType<typeof parseSettings> {
