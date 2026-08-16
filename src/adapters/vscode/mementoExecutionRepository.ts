@@ -23,6 +23,7 @@ interface StoredExecution {
 
 const STORAGE_KEY = "amazingMultiCodex.executions.v1";
 const MAX_RETAINED_EXECUTIONS = 1_000;
+const MAX_PERSISTED_EXECUTIONS = 10_000;
 
 export class MementoExecutionRepository implements ExecutionRepository {
   private readonly writes = new AsyncOperationQueue();
@@ -102,7 +103,7 @@ export class MementoExecutionRepository implements ExecutionRepository {
   private records(): Result<StoredExecution[]> {
     try {
       const stored = this.state.get<unknown>(STORAGE_KEY, []);
-      if (!Array.isArray(stored) || !stored.every(isStoredExecution)
+      if (!Array.isArray(stored) || stored.length > MAX_PERSISTED_EXECUTIONS || !stored.every(isStoredExecution)
         || !hasUniqueIds(stored) || !hasConsistentAssociations(stored)) return err(corruptState());
       return ok([...stored]);
     } catch (cause) {

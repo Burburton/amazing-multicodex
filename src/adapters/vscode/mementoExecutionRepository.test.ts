@@ -112,6 +112,13 @@ test("rejects duplicate persisted Codex turn associations", async () => {
   if (!active.ok) assert.equal(active.error.code, "execution.state-invalid");
 });
 
+test("rejects execution state beyond the persistence safety limit", async () => {
+  const oversized = Array.from({ length: 10_001 }, () => null);
+  const active = await new MementoExecutionRepository(new FakeState(oversized)).listActive();
+  assert.equal(active.ok, false);
+  if (!active.ok) assert.equal(active.error.code, "execution.state-invalid");
+});
+
 test("serializes concurrent writes so different executions are not lost", async () => {
   const repository = new MementoExecutionRepository(new FakeState());
   const base = {
