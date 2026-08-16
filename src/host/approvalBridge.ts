@@ -49,9 +49,17 @@ export class ApprovalBridge {
       });
       return { decision: "cancel" };
     }
-    const decision = await this.prompt.decide(captured.value);
+    let decision: Exclude<ApprovalStatus, "pending">;
+    try {
+      decision = await this.prompt.decide(captured.value);
+    } catch {
+      decision = "cancelled";
+    }
     const decided = await this.approvals.decide({ approvalId: captured.value.id, decision });
-    if (!decided.ok) return { decision: "cancel" };
+    if (!decided.ok) {
+      await this.tasks.transition(execution.value.taskId, "blocked", decided.error.code);
+      return { decision: "cancel" };
+    }
     const running = await this.tasks.transition(execution.value.taskId, "running");
     if (!running.ok) {
       await this.tasks.transition(execution.value.taskId, "blocked", running.error.code);
