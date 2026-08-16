@@ -29,6 +29,7 @@ import {
   CreateTaskHandler,
   TaskDependencyService,
   TaskLifecycleService,
+  TaskPriority,
   TaskProps
 } from "./modules/tasks/public";
 import {
@@ -88,7 +89,18 @@ export function activate(context: vscode.ExtensionContext): void {
         prompt: "Optional task context",
         placeHolder: "Constraints, acceptance criteria, or relevant notes"
       });
-      const created = await createTask.execute({ title, description });
+      const priority = await vscode.window.showQuickPick<{
+        label: string;
+        description: string;
+        priority: TaskPriority;
+      }>([
+        { label: "Normal", description: "Default scheduling priority", priority: "normal" },
+        { label: "High", description: "Run before normal and low tasks", priority: "high" },
+        { label: "Urgent", description: "Run before all other queued tasks", priority: "urgent" },
+        { label: "Low", description: "Run after normal tasks", priority: "low" }
+      ], { placeHolder: "Choose a scheduling priority" });
+      if (!priority) return;
+      const created = await createTask.execute({ title, description, priority: priority.priority });
       if (!created.ok) {
         void vscode.window.showErrorMessage(created.error.message);
         return;
