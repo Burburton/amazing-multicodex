@@ -1,7 +1,7 @@
 # Amazing MultiCodex Architecture
 
 Status: accepted baseline, incrementally implemented
-Last updated: 2026-08-15
+Last updated: 2026-08-16
 
 ## Implementation status
 
@@ -15,8 +15,15 @@ repository ports, with optimistic versions and serialized read-modify-write
 operations. This is an intentional transitional implementation, not a change
 to the SQLite decision in section 10. Lifecycle-driven dispatch, restart
 reconciliation, safe workspace cleanup, and a reusable task-detail webview are
-implemented. Transactional persistence/outbox and live Codex thread-state
-reconciliation remain future increments.
+implemented. The current presentation includes a sorted Explorer task board,
+state-filtered Command Palette actions, editable drafts, task follow-ups, an
+actionable readiness report, and a live-refreshing detail/activity panel.
+
+External protocol lines, process output, persisted records, approval payloads,
+and user-visible vendor errors have explicit size and redaction boundaries.
+Approval requests and decisions are projected into the task activity timeline;
+a separate approval inbox, transactional persistence/outbox, and live Codex
+thread-state reconciliation remain future increments.
 
 ## 1. Purpose
 
@@ -508,7 +515,9 @@ readyForReview -> integrating -> completed
 
 Any active state -> blocked | failed | cancelled
 blocked -> queued
+blocked -> readyForReview (integration recovery only)
 failed  -> queued
+cancelled -> queued
 ```
 
 `blocked` means user or environmental action is required. `failed` means an
@@ -521,12 +530,13 @@ derived from reason codes rather than parsing error strings.
 
 Presentation is replaceable and contains no workflow logic.
 
-Initial surfaces:
+Target surfaces (the approval inbox remains planned):
 
 - task board/tree: task status, priority, dependencies, active phase;
 - task detail webview: prompt, timeline, changed files, validation, actions;
 - approval inbox: pending requests and scoped decisions;
-- runtime status: authentication, connection, concurrency, degraded state.
+- runtime status: executable, repository, base ref, connection, and actionable
+  remediation. Authentication and richer degraded-state telemetry remain planned.
 
 Webviews communicate with the extension through versioned messages validated at
 runtime. They issue commands and subscribe to projections; they never receive
@@ -587,7 +597,7 @@ quota.
   strings;
 - keep credentials in Codex/OS-managed storage, not the project database;
 - redact known secrets from activity output;
-- cap persisted output size and UI message size;
+- cap protocol lines, process output, persisted records, and UI message size;
 - bind any future socket transport to loopback by default;
 - require explicit confirmation for integration and destructive cleanup;
 - verify paths are descendants of the configured worktree root;
