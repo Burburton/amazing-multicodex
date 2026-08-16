@@ -98,10 +98,13 @@ export class JsonRpcPeer {
 
   handleServerRequest(method: string, handler: ServerRequestHandler): () => void {
     this.serverRequestHandlers.set(method, handler);
-    return () => this.serverRequestHandlers.delete(method);
+    return () => {
+      if (this.serverRequestHandlers.get(method) === handler) this.serverRequestHandlers.delete(method);
+    };
   }
 
   receive(message: JsonRpcMessage): void {
+    if (this.closed) return;
     if (isResponse(message)) {
       this.receiveResponse(message);
       return;

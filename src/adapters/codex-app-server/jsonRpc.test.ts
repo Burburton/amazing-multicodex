@@ -79,3 +79,33 @@ test("drops a delayed server response after the connection closes", async () => 
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(transport.messages, []);
 });
+
+test("drops inbound notifications and requests after the peer closes", async () => {
+  const transport = new RecordingTransport();
+  const peer = new JsonRpcPeer(transport);
+  const notifications: unknown[] = [];
+  let requests = 0;
+  peer.onNotification("turn/started", value => notifications.push(value));
+  peer.handleServerRequest("approval/request", async () => { requests += 1; return {}; });
+  peer.close();
+
+  peer.receive({ method: "turn/started", params: { id: "late" } });
+  peer.receive({ id: 11, method: "approval/request", params: {} });
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.deepEqual(notifications, []);
+  assert.equal(requests, 0);
+  assert.deepEqual(transport.messages, []);
+});
+
+test("an old server-handler disposer does not remove its replacement", async () => {
+  const transport = new RecordingTransport();
+  const peer = new JsonRpcPeer(transport);
+  const disposeOld = peer.handleServerRequest("approval/request", async () => "old");
+  peer.handleServerRequest("approval/request", async () => "new");
+  disposeOld();
+  peer.receive({ id: 12, method: "approval/request" });
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.deepEqual(transport.messages, [{ id: 12, result: "new" }]);
+});
