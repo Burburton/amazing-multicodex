@@ -128,3 +128,20 @@ test("rejects changes made after review and unstages the workspace", async () =>
   assert.deepEqual(commands.calls.at(-1)?.args, ["reset", "base"]);
   assert.equal(commands.calls.some(call => call.args[0] === "merge"), false);
 });
+
+test("rejects integration into a different repository before running Git", async () => {
+  const commands = new Commands();
+  const result = await new GitIntegrationAdapter(commands).integrate({
+    workspace: {
+      id: "workspace" as WorkspaceId, taskId: "task" as TaskId,
+      repositoryRoot: "/original", worktreeRoot: "/worktrees", path: "/worktrees/task",
+      branch: "multicodex/task", baseRef: "base"
+    },
+    targetRepositoryRoot: "/different", strategy: "merge", commitMessage: "Integrate task",
+    reviewedPatch: "patch"
+  });
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "integration.target-mismatch");
+  assert.equal(commands.calls.length, 0);
+});

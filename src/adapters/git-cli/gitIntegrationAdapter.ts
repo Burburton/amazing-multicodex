@@ -1,4 +1,5 @@
 import { AppError, Result, err, ok } from "../../shared/core/result";
+import path from "node:path";
 import { CommandResult, CommandRunnerPort } from "../../shared/ports/commandRunner";
 import {
   IntegrateWorkspaceInput,
@@ -10,6 +11,12 @@ export class GitIntegrationAdapter implements IntegrationPort {
   constructor(private readonly commands: CommandRunnerPort) {}
 
   async integrate(input: IntegrateWorkspaceInput): Promise<Result<IntegrationResult>> {
+    if (path.resolve(input.targetRepositoryRoot) !== path.resolve(input.workspace.repositoryRoot)) {
+      return err(integrationError(
+        "integration.target-mismatch",
+        "The open target repository does not match the repository that created this task workspace."
+      ));
+    }
     const cleanTarget = await this.git(input.targetRepositoryRoot, ["status", "--porcelain=v1"]);
     if (!cleanTarget.ok) return cleanTarget;
     if (cleanTarget.value.stdout.trim()) {
