@@ -44,7 +44,7 @@ import {
 import { SystemClock } from "./shared/core/clock";
 import { CryptoIdGenerator } from "./shared/core/idGenerator";
 import { TaskTreeProvider } from "./ui/taskTreeProvider";
-import { showTaskDetailPanel, TaskDetailAction } from "./ui/taskDetailPanel";
+import { TaskDetailPanelManager, TaskDetailAction } from "./ui/taskDetailPanel";
 
 export function activate(context: vscode.ExtensionContext): void {
   const repository = new MementoTaskRepository(context.workspaceState);
@@ -77,6 +77,26 @@ export function activate(context: vscode.ExtensionContext): void {
   const approvals = new ApprovalService(
     new MementoApprovalRepository(context.workspaceState), clock, ids
   );
+  const taskDetailQuery = new TaskDetailQuery(lifecycle, dependencies, executions, activity);
+  const detailCommands: Readonly<Record<TaskDetailAction, string>> = {
+    queue: "amazingMultiCodex.queueTask",
+    start: "amazingMultiCodex.startTask",
+    resume: "amazingMultiCodex.resumeTask",
+    cancel: "amazingMultiCodex.cancelTask",
+    validate: "amazingMultiCodex.validateTask",
+    changes: "amazingMultiCodex.showChanges",
+    integrate: "amazingMultiCodex.integrateTask",
+    release: "amazingMultiCodex.releaseWorkspace"
+  };
+  const taskDetails = new TaskDetailPanelManager(
+    async taskId => {
+      const detail = await taskDetailQuery.execute(taskId);
+      if (detail.ok) return detail.value;
+      void vscode.window.showErrorMessage(detail.error.message);
+      return undefined;
+    },
+    async (action, task) => { await vscode.commands.executeCommand(detailCommands[action], task); }
+  );
   let coordinator: AgentEventCoordinator | undefined;
   let activityBridge: AgentActivityBridge | undefined;
   let approvalBridge: ApprovalBridge | undefined;
@@ -85,6 +105,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     tree,
+    taskDetails,
     { dispose: () => {
       coordinator?.stop();
       activityBridge?.stop();
@@ -283,24 +304,7 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showErrorMessage("Select a MultiCodex task to view its details.");
         return;
       }
-      const detail = await new TaskDetailQuery(lifecycle, dependencies, executions, activity).execute(task.id);
-      if (!detail.ok) {
-        void vscode.window.showErrorMessage(detail.error.message);
-        return;
-      }
-      const commands: Readonly<Record<TaskDetailAction, string>> = {
-        queue: "amazingMultiCodex.queueTask",
-        start: "amazingMultiCodex.startTask",
-        resume: "amazingMultiCodex.resumeTask",
-        cancel: "amazingMultiCodex.cancelTask",
-        validate: "amazingMultiCodex.validateTask",
-        changes: "amazingMultiCodex.showChanges",
-        integrate: "amazingMultiCodex.integrateTask",
-        release: "amazingMultiCodex.releaseWorkspace"
-      };
-      showTaskDetailPanel(detail.value, action => {
-        void vscode.commands.executeCommand(commands[action], detail.value.task);
-      });
+      await taskDetails.show(task.id);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.cancelTask", async (task?: TaskProps) => {
       if (!task) {

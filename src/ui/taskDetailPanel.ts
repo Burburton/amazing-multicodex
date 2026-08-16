@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
 import { TaskDetailProjection } from "../modules/orchestration/public";
+import { TaskId, TaskProps } from "../modules/tasks/public";
 
 export type TaskDetailAction = "queue" | "start" | "resume" | "cancel" | "validate" | "changes" | "integrate" | "release";
 
@@ -8,23 +9,62 @@ const allowedActions = new Set<TaskDetailAction>([
   "queue", "start", "resume", "cancel", "validate", "changes", "integrate", "release"
 ]);
 
-export function showTaskDetailPanel(
-  detail: TaskDetailProjection,
-  onAction: (action: TaskDetailAction) => void
-): void {
-  const panel = vscode.window.createWebviewPanel(
-    "amazingMultiCodex.taskDetail",
-    `MultiCodex: ${detail.task.title}`,
-    vscode.ViewColumn.Active,
-    { enableScripts: true }
-  );
-  panel.webview.html = render(detail);
-  panel.webview.onDidReceiveMessage(message => {
-    if (!message || typeof message !== "object") return;
-    const candidate = message as Record<string, unknown>;
-    if (candidate.version !== 1 || candidate.type !== "action" || typeof candidate.action !== "string") return;
-    if (allowedActions.has(candidate.action as TaskDetailAction)) onAction(candidate.action as TaskDetailAction);
-  });
+export class TaskDetailPanelManager implements vscode.Disposable {
+  private readonly panels = new Map<TaskId, vscode.WebviewPanel>();
+
+  constructor(
+    private readonly load: (taskId: TaskId) => Promise<TaskDetailProjection | undefined>,
+    private readonly onAction: (action: TaskDetailAction, task: TaskProps) => Promise<void>
+  ) {}
+
+  async show(taskId: TaskId): Promise<void> {
+    const existing = this.panels.get(taskId);
+    if (existing) {
+      existing.reveal(vscode.ViewColumn.Active);
+      await this.refresh(taskId, existing);
+      return;
+    }
+    const detail = await this.load(taskId);
+    if (!detail) return;
+    const panel = vscode.window.createWebviewPanel(
+      "amazingMultiCodex.taskDetail",
+      `MultiCodex: ${detail.task.title}`,
+      vscode.ViewColumn.Active,
+      { enableScripts: true, retainContextWhenHidden: true }
+    );
+    this.panels.set(taskId, panel);
+    panel.webview.html = render(detail);
+    panel.onDidDispose(() => this.panels.delete(taskId));
+    panel.onDidChangeViewState(event => {
+      if (event.webviewPanel.visible) void this.refresh(taskId, panel);
+    });
+    panel.webview.onDidReceiveMessage(async message => {
+      if (!isActionMessage(message)) return;
+      const current = await this.load(taskId);
+      if (!current) return;
+      await this.onAction(message.action, current.task);
+      await this.refresh(taskId, panel);
+    });
+  }
+
+  dispose(): void {
+    for (const panel of this.panels.values()) panel.dispose();
+    this.panels.clear();
+  }
+
+  private async refresh(taskId: TaskId, panel: vscode.WebviewPanel): Promise<void> {
+    const detail = await this.load(taskId);
+    if (!detail || !this.panels.has(taskId)) return;
+    panel.title = `MultiCodex: ${detail.task.title}`;
+    panel.webview.html = render(detail);
+  }
+}
+
+function isActionMessage(message: unknown): message is { version: 1; type: "action"; action: TaskDetailAction } {
+  if (!message || typeof message !== "object") return false;
+  const candidate = message as Record<string, unknown>;
+  return candidate.version === 1 && candidate.type === "action" && typeof candidate.action === "string"
+    && allowedActions.has(candidate.action as TaskDetailAction);
 }
 
 function render(detail: TaskDetailProjection): string {
