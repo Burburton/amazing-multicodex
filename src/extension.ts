@@ -553,6 +553,7 @@ export function activate(context: vscode.ExtensionContext): void {
           `MultiCodex recovered with ${report.value.blocked.length} blocked task(s) requiring retry.`
         );
       }
+      if (report.ok) void dispatchQueue(false);
     });
 
   function dispatchQueue(notify: boolean): Promise<void> {
