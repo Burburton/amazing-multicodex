@@ -7,6 +7,7 @@ export class NodeProcessFactory implements ProcessFactory {
       cwd: spec.cwd,
       env: { ...process.env, ...spec.env },
       stdio: ["pipe", "pipe", "pipe"],
+      detached: process.platform !== "win32",
       windowsHide: true
     });
     if (!child.stdin || !child.stdout || !child.stderr) {
@@ -28,9 +29,17 @@ export class NodeProcessFactory implements ProcessFactory {
         return () => child.off("error", listener);
       },
       terminate() {
-        if (!child.killed) child.kill();
+        if (child.killed) return;
+        if (process.platform !== "win32" && child.pid !== undefined) {
+          try {
+            process.kill(-child.pid, "SIGTERM");
+            return;
+          } catch {
+            // Fall back to the direct child when a process group is unavailable.
+          }
+        }
+        child.kill("SIGTERM");
       }
     };
   }
 }
-
