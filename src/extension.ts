@@ -5,7 +5,7 @@ import { NodeCommandRunner } from "./adapters/process/nodeCommandRunner";
 import { NodeProcessFactory } from "./adapters/process/nodeProcessFactory";
 import { MementoTaskRepository } from "./adapters/vscode/mementoTaskRepository";
 import { InMemoryExecutionRepository } from "./modules/orchestration/adapters/inMemoryExecutionRepository";
-import { StartTaskWorkflow } from "./modules/orchestration/public";
+import { AgentEventCoordinator, StartTaskWorkflow } from "./modules/orchestration/public";
 import { CreateTaskHandler, TaskLifecycleService, TaskProps } from "./modules/tasks/public";
 import { SystemClock } from "./shared/core/clock";
 import { CryptoIdGenerator } from "./shared/core/idGenerator";
@@ -25,10 +25,14 @@ export function activate(context: vscode.ExtensionContext): void {
     processError: error => console.error("Codex App Server error", error)
   });
   const executions = new InMemoryExecutionRepository();
+  let coordinator: AgentEventCoordinator | undefined;
 
   context.subscriptions.push(
     tree,
-    { dispose: () => codex.stop() },
+    { dispose: () => {
+      coordinator?.stop();
+      codex.stop();
+    } },
     vscode.window.registerTreeDataProvider("amazingMultiCodex.tasks", tree),
     vscode.commands.registerCommand("amazingMultiCodex.createTask", async () => {
       const title = await vscode.window.showInputBox({
@@ -81,6 +85,12 @@ export function activate(context: vscode.ExtensionContext): void {
         try {
           await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(storage, "worktrees"));
           const agent = await codex.start({ cwd: workspaceFolder.uri.fsPath });
+          coordinator?.stop();
+          coordinator = new AgentEventCoordinator(agent, executions, lifecycle, clock, {
+            error: (message, error) => console.error(message, error),
+            taskChanged: () => tree.refresh()
+          });
+          coordinator.start();
           const workflow = new StartTaskWorkflow(
             lifecycle,
             new GitWorkspaceAdapter(new NodeCommandRunner()),

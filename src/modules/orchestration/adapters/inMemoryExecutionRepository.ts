@@ -1,4 +1,5 @@
 import { AppError, Result, err, ok } from "../../../shared/core/result";
+import { AgentThreadId, AgentTurnId } from "../../agents/public";
 import { TaskId } from "../../tasks/public";
 import { ExecutionRepository, TaskExecutionId, TaskExecutionRecord } from "../ports/executionRepository";
 
@@ -12,6 +13,12 @@ export class InMemoryExecutionRepository implements ExecutionRepository {
   async findActiveByTask(taskId: TaskId): Promise<Result<TaskExecutionRecord | undefined>> {
     return ok([...this.records.values()].find(record =>
       record.taskId === taskId && ["prepared", "running"].includes(record.status)
+    ));
+  }
+
+  async findByAgent(threadId: AgentThreadId, turnId: AgentTurnId): Promise<Result<TaskExecutionRecord | undefined>> {
+    return ok([...this.records.values()].find(record =>
+      record.agent?.threadId === threadId && record.agent.turnId === turnId
     ));
   }
 
@@ -32,4 +39,3 @@ function conflict(id: TaskExecutionId, expected: number, actual: number): AppErr
     context: { id, expected: String(expected), actual: String(actual) }
   };
 }
-

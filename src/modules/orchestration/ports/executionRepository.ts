@@ -1,6 +1,6 @@
 import { Brand } from "../../../shared/core/brand";
 import { Result } from "../../../shared/core/result";
-import { AgentExecutionRef } from "../../agents/public";
+import { AgentExecutionRef, AgentThreadId, AgentTurnId } from "../../agents/public";
 import { TaskId } from "../../tasks/public";
 import { WorkspaceRef } from "../../workspaces/public";
 
@@ -21,6 +21,6 @@ export interface TaskExecutionRecord {
 export interface ExecutionRepository {
   findById(id: TaskExecutionId): Promise<Result<TaskExecutionRecord | undefined>>;
   findActiveByTask(taskId: TaskId): Promise<Result<TaskExecutionRecord | undefined>>;
+  findByAgent(threadId: AgentThreadId, turnId: AgentTurnId): Promise<Result<TaskExecutionRecord | undefined>>;
   save(record: TaskExecutionRecord, expectedVersion: number): Promise<Result<void>>;
 }
-
