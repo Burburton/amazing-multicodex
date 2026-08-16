@@ -68,3 +68,32 @@ test("leaves tasks with incomplete prerequisites out of the dispatch set", async
   assert.equal(result.ok, true);
   assert.deepEqual(calls, ["prerequisite"]);
 });
+
+test("continues dispatching when one selected task fails to start", async () => {
+  const now = new Date("2026-01-01T00:00:00Z");
+  const tasks = new TaskMemory();
+  for (const id of ["first", "second"] as const) {
+    const created = Task.create({ id: id as TaskId, title: id, now });
+    assert.equal(created.ok, true);
+    if (!created.ok) return;
+    created.value.transition("queued", now);
+    await tasks.save(created.value, -1);
+  }
+  const calls: TaskId[] = [];
+  const starter = { execute: async ({ taskId }: { taskId: TaskId }) => {
+    calls.push(taskId);
+    return taskId === "first"
+      ? { ok: false as const, error: { code: "start.failed", category: "unavailable" as const, message: "failed", retryable: true } }
+      : { ok: true as const, value: undefined as never };
+  } };
+  const dependencies = new TaskDependencyService(new DependencyMemory(), tasks);
+  const workflow = new DispatchQueuedTasksWorkflow(tasks, new InMemoryExecutionRepository(), dependencies, new SchedulerPolicy(), starter as never);
+  const result = await workflow.execute({ repositoryRoot: "/repo", worktreeRoot: "/trees", baseRef: "HEAD", concurrencyLimit: 2 });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, ["first", "second"]);
+  if (result.ok) {
+    assert.deepEqual(result.value.started, ["second"]);
+    assert.equal(result.value.failures[0]?.taskId, "first");
+  }
+});
