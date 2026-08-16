@@ -96,11 +96,14 @@ function isMessage(value: unknown): value is JsonRpcMessage {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
   const hasId = "id" in record;
-  const validId = typeof record.id === "number" || typeof record.id === "string";
-  if (typeof record.method === "string") return !hasId || validId;
+  const validId = typeof record.id === "number"
+    || (typeof record.id === "string" && record.id.length <= 4_096);
+  if (typeof record.method === "string") {
+    return record.method.length > 0 && record.method.length <= 4_096 && (!hasId || validId);
+  }
   if (!hasId || !validId) return false;
   if ("result" in record) return !("error" in record);
   if (!("error" in record) || !record.error || typeof record.error !== "object") return false;
   const error = record.error as Record<string, unknown>;
-  return typeof error.code === "number" && typeof error.message === "string";
+  return typeof error.code === "number" && typeof error.message === "string" && error.message.length <= 4_096;
 }

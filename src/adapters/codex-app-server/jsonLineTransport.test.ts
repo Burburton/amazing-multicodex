@@ -52,3 +52,25 @@ test("drops an oversized line and continues with the next protocol message", asy
   assert.deepEqual(received, [{ method: "ok" }]);
   transport.dispose();
 });
+
+test("rejects oversized JSON-RPC routing fields", async () => {
+  const input = new PassThrough();
+  const transport = new JsonLineTransport(input, new PassThrough(), {
+    onMessage: () => assert.fail("oversized protocol message was accepted"),
+    onMalformedLine: () => undefined
+  });
+  let malformed = 0;
+  transport.dispose();
+
+  const active = new JsonLineTransport(input, new PassThrough(), {
+    onMessage: () => assert.fail("oversized protocol message was accepted"),
+    onMalformedLine: () => { malformed += 1; }
+  });
+  input.write(`${JSON.stringify({ method: "m".repeat(4_097) })}\n`);
+  input.write(`${JSON.stringify({ id: "i".repeat(4_097), result: null })}\n`);
+  input.write(`${JSON.stringify({ id: 1, error: { code: -1, message: "e".repeat(4_097) } })}\n`);
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(malformed, 3);
+  active.dispose();
+});
