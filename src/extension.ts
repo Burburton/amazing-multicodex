@@ -17,6 +17,7 @@ import { IntegrateTaskWorkflow, IntegrationStrategy } from "./modules/integratio
 import { ValidationCommandSetting, parseSettings } from "./modules/settings/public";
 import {
   AgentEventCoordinator,
+  AbandonTaskWorkflow,
   CancelTaskWorkflow,
   DispatchQueuedTasksWorkflow,
   ExecutionCapacityGate,
@@ -306,20 +307,19 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showErrorMessage("Select a running MultiCodex task to cancel.");
         return;
       }
-      const agent = codex.current();
-      if (!agent) {
-        void vscode.window.showErrorMessage("Codex App Server is not connected; resume the task before cancelling it.");
-        return;
-      }
       const confirmed = await vscode.window.showWarningMessage(
-        `Cancel MultiCodex task '${task.title}'?`,
+        `Cancel MultiCodex task '${task.title}'?${codex.current() ? "" : " Codex is disconnected, so only local execution state will be abandoned."}`,
         { modal: true },
         "Cancel Task"
       );
       if (confirmed !== "Cancel Task") return;
-      const cancelled = await new CancelTaskWorkflow(lifecycle, agent, executions, clock).execute(task.id);
+      const agent = codex.current();
+      const cancelled = agent
+        ? await new CancelTaskWorkflow(lifecycle, agent, executions, clock).execute(task.id)
+        : await new AbandonTaskWorkflow(lifecycle, executions, clock).execute(task.id);
       tree.refresh();
       if (!cancelled.ok) void vscode.window.showErrorMessage(cancelled.error.message);
+      else void dispatchQueue(false);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.validateTask", async (task?: TaskProps) => {
       if (!task) {

@@ -8,6 +8,7 @@ export type { DispatchQueuedTasksCommand, DispatchQueuedTasksReport } from "./ap
 export { ResumeTaskWorkflow } from "./application/resumeTaskWorkflow";
 export type { ResumeTaskWorkflowCommand } from "./application/resumeTaskWorkflow";
 export { CancelTaskWorkflow } from "./application/cancelTaskWorkflow";
+export { AbandonTaskWorkflow } from "./application/abandonTaskWorkflow";
 export { ReleaseTaskWorkspaceWorkflow } from "./application/releaseTaskWorkspaceWorkflow";
 export { ReconcileExecutionsWorkflow } from "./application/reconcileExecutionsWorkflow";
 export type { ReconciliationReport } from "./application/reconcileExecutionsWorkflow";
