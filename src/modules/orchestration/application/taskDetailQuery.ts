@@ -36,16 +36,14 @@ export class TaskDetailQuery {
     if (!execution.ok) return execution;
     if (!activity.ok) return activity;
 
-    const prerequisites: TaskPrerequisiteSummary[] = [];
-    for (const edge of edges.value) {
-      const prerequisite = await this.tasks.get(edge.prerequisiteId);
-      if (!prerequisite.ok) return prerequisite;
-      prerequisites.push({
-        taskId: prerequisite.value.id,
-        title: prerequisite.value.title,
-        status: prerequisite.value.status
-      });
-    }
+    const resolved = await Promise.all(edges.value.map(edge => this.tasks.get(edge.prerequisiteId)));
+    const failed = resolved.find(result => !result.ok);
+    if (failed && !failed.ok) return failed;
+    const prerequisites: TaskPrerequisiteSummary[] = resolved.flatMap(result => result.ok ? [{
+      taskId: result.value.id,
+      title: result.value.title,
+      status: result.value.status
+    }] : []);
     return ok({ task: task.value, prerequisites, latestExecution: execution.value, activity: activity.value });
   }
 }
