@@ -17,6 +17,19 @@ export class GitIntegrationAdapter implements IntegrationPort {
     }
     const added = await this.git(input.workspace.path, ["add", "-A"]);
     if (!added.ok) return added;
+    const currentPatch = await this.git(input.workspace.path, [
+      "diff", "--cached", "--binary", "--no-ext-diff", input.workspace.baseRef
+    ]);
+    if (!currentPatch.ok) return currentPatch;
+    if (canonicalPatch(currentPatch.value.stdout) !== canonicalPatch(input.reviewedPatch)) {
+      const unstaged = await this.git(input.workspace.path, ["reset", input.workspace.baseRef]);
+      if (!unstaged.ok) return unstaged;
+      return err(integrationError(
+        "integration.review-stale",
+        "Task changes no longer match the reviewed diff. Review the latest changes before integrating.",
+        true
+      ));
+    }
     const staged = await this.git(input.workspace.path, ["diff", "--cached", "--quiet"], [0, 1]);
     if (!staged.ok) return staged;
     if (staged.value.exitCode === 1) {
@@ -85,4 +98,8 @@ export class GitIntegrationAdapter implements IntegrationPort {
 
 function integrationError(code: string, message: string, retryable = false, cause?: unknown): AppError {
   return { code, category: code === "git.unavailable" ? "unavailable" : "conflict", message, retryable, cause };
+}
+
+function canonicalPatch(patch: string): string {
+  return patch.split(/(?=^diff --git )/m).map(block => block.trim()).filter(Boolean).sort().join("\n");
 }

@@ -49,9 +49,10 @@ test("real Git contract covers worktree diff and reviewed merge integration", as
       workspace: prepared.value,
       targetRepositoryRoot: repositoryRoot,
       strategy: "merge",
-      commitMessage: "Integrate contract task"
+      commitMessage: "Integrate contract task",
+      reviewedPatch: changes.value.patch
     });
-    assert.equal(integrated.ok, true);
+    assert.equal(integrated.ok, true, integrated.ok ? undefined : `${integrated.error.code}: ${integrated.error.message}`);
     if (!integrated.ok) return;
     assert.equal(fs.readFileSync(path.join(repositoryRoot, "tracked.txt"), "utf8"), "after\n");
     assert.equal(fs.readFileSync(path.join(repositoryRoot, "new.txt"), "utf8"), "new file\n");
@@ -86,9 +87,12 @@ test("real Git contract restores a clean target after an integration conflict", 
     await git(commands, repositoryRoot, ["add", "conflict.txt"]);
     await git(commands, repositoryRoot, ["commit", "-m", "target change"]);
 
+    const changes = await new GitWorkspaceAdapter(commands).diff(prepared.value);
+    assert.equal(changes.ok, true);
+    if (!changes.ok) return;
     const integrated = await new GitIntegrationAdapter(commands).integrate({
       workspace: prepared.value, targetRepositoryRoot: repositoryRoot,
-      strategy: "merge", commitMessage: "conflicting task"
+      strategy: "merge", commitMessage: "conflicting task", reviewedPatch: changes.value.patch
     });
 
     assert.equal(integrated.ok, false);

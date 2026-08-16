@@ -434,7 +434,8 @@ export function activate(context: vscode.ExtensionContext): void {
         taskId: task.id,
         targetRepositoryRoot: workspaceFolder.uri.fsPath,
         strategy: selection.strategy,
-        commitMessage: `MultiCodex: ${task.title}`
+        commitMessage: `MultiCodex: ${task.title}`,
+        reviewedPatch: changes.value.patch
       });
       tree.refresh();
       if (!integrated.ok) {

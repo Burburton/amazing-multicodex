@@ -8,6 +8,7 @@ export interface IntegrateTaskCommand {
   readonly targetRepositoryRoot: string;
   readonly strategy: IntegrationStrategy;
   readonly commitMessage: string;
+  readonly reviewedPatch: string;
 }
 
 export class IntegrateTaskWorkflow {
@@ -37,7 +38,8 @@ export class IntegrateTaskWorkflow {
       workspace: execution.value.workspace,
       targetRepositoryRoot: command.targetRepositoryRoot,
       strategy: command.strategy,
-      commitMessage: command.commitMessage
+      commitMessage: command.commitMessage,
+      reviewedPatch: command.reviewedPatch
     });
     if (!integrated.ok) {
       await this.tasks.transition(command.taskId, "blocked", integrated.error.code);

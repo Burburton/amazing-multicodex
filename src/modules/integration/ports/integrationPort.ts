@@ -8,6 +8,7 @@ export interface IntegrateWorkspaceInput {
   readonly targetRepositoryRoot: string;
   readonly strategy: IntegrationStrategy;
   readonly commitMessage: string;
+  readonly reviewedPatch: string;
 }
 
 export interface IntegrationResult {
@@ -19,4 +20,3 @@ export interface IntegrationResult {
 export interface IntegrationPort {
   integrate(input: IntegrateWorkspaceInput): Promise<Result<IntegrationResult>>;
 }
-
