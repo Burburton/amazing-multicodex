@@ -15,6 +15,7 @@ interface StoredApproval extends Omit<ApprovalProps, "createdAt" | "decidedAt"> 
 }
 
 const STORAGE_KEY = "amazingMultiCodex.approvals.v1";
+const MAX_RECORDS = 500;
 
 export class MementoApprovalRepository implements ApprovalRepository {
   private readonly writes = new AsyncOperationQueue();
@@ -49,8 +50,9 @@ export class MementoApprovalRepository implements ApprovalRepository {
     const stored = toStored(snapshot);
     if (index === -1) records.value.unshift(stored);
     else records.value[index] = stored;
+    const bounded = boundRecords(records.value);
     try {
-      await this.state.update(STORAGE_KEY, records.value);
+      await this.state.update(STORAGE_KEY, bounded);
       return ok(undefined);
     } catch (cause) {
       return err({ code: "approval.persistence-failed", category: "unavailable", message: "Approval could not be persisted.", retryable: true, cause });
@@ -66,6 +68,13 @@ export class MementoApprovalRepository implements ApprovalRepository {
       return err({ code: "approval.persistence-failed", category: "unavailable", message: "Approval state could not be read.", retryable: true, cause });
     }
   }
+}
+
+function boundRecords(records: readonly StoredApproval[]): StoredApproval[] {
+  if (records.length <= MAX_RECORDS) return [...records];
+  const pending = records.filter(record => record.status === "pending");
+  const terminalLimit = Math.max(0, MAX_RECORDS - pending.length);
+  return [...pending, ...records.filter(record => record.status !== "pending").slice(0, terminalLimit)];
 }
 
 function isStoredApproval(value: unknown): value is StoredApproval {
