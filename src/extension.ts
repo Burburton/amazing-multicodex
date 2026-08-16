@@ -213,16 +213,25 @@ export function activate(context: vscode.ExtensionContext): void {
         baseRef: settings.value.baseRef
       }));
       const health = codex.current()?.health() ?? { status: "disconnected" as const };
-      await vscode.window.showQuickPick(checks.map(check => ({
+      const selected = await vscode.window.showQuickPick(checks.map(check => ({
         label: `$(${check.ok ? "pass-filled" : "error"}) ${check.label}`,
         description: check.ok ? "Ready" : "Needs attention",
-        detail: check.detail
+        detail: check.detail,
+        check
       })), {
         title: `MultiCodex readiness · App Server ${health.status}`,
         placeHolder: checks.every(check => check.ok)
           ? "All prerequisites are ready. The App Server starts when a task runs."
           : "Resolve failed checks before starting a task."
       });
+      if (!selected || selected.check.ok) return;
+      const actionLabel = selected.check.id === "repository" ? "Open Folder" : "Open Settings";
+      const action = await vscode.window.showErrorMessage(selected.check.detail, actionLabel);
+      if (action === "Open Folder") {
+        await vscode.commands.executeCommand("workbench.action.files.openFolder");
+      } else if (action === "Open Settings") {
+        await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:amazing-multicodex.amazing-multicodex");
+      }
     }),
     vscode.commands.registerCommand("amazingMultiCodex.queueTask", async (task?: TaskProps) => {
       task = await selectTask(task, candidate => ["draft", "failed", "cancelled", "blocked"].includes(candidate.status)

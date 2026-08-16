@@ -13,6 +13,8 @@ The extension currently provides the core multi-task execution loop:
 - persistent tasks, execution associations, approvals, and bounded activity;
 - a `MultiCodex Tasks` Explorer view with create, start, resume, cancel, and
   activity commands;
+- command-palette task selection filtered to the states accepted by each action;
+- actionable runtime readiness checks for Codex, Git, and the configured base ref;
 - one isolated Git worktree and branch per task execution;
 - a supervised local Codex App Server connection over JSONL/stdio;
 - streamed turn completion, agent response capture, and task-state recovery;
@@ -81,6 +83,10 @@ code --install-extension ./amazing-multicodex-0.1.0.vsix
 
 Reload VS Code, open Explorer, and find the `MultiCodex Tasks` view. Its empty
 state links directly to task creation, runtime status, and extension settings.
+This Explorer view is the main visual interface: click a task to open its live
+detail panel, use inline buttons for its next action, or right-click for all
+available operations. The same operations are available from the Command
+Palette (`Ctrl/Cmd+Shift+P`) under `MultiCodex:` and prompt for an eligible task.
 
 The normal task flow is:
 
