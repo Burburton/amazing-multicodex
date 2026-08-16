@@ -396,13 +396,32 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showErrorMessage("Open the target local Git workspace before integrating.");
         return;
       }
+      const execution = await executions.findLatestByTask(task.id);
+      if (!execution.ok || !execution.value) {
+        void vscode.window.showErrorMessage(execution.ok ? "No execution was found for this task." : execution.error.message);
+        return;
+      }
+      const changes = await gitWorkspaces.diff(execution.value.workspace);
+      if (!changes.ok) {
+        void vscode.window.showErrorMessage(changes.error.message);
+        return;
+      }
+      const review = await vscode.workspace.openTextDocument({
+        language: "diff",
+        content: changes.value.patch || "No changes relative to the task base ref."
+      });
+      await vscode.window.showTextDocument(review, { preview: true });
+      if (!changes.value.patch) {
+        void vscode.window.showErrorMessage("The task has no changes to integrate.");
+        return;
+      }
       const selection = await vscode.window.showQuickPick([
         { label: "Merge commit", strategy: "merge" as IntegrationStrategy },
         { label: "Squash commit", strategy: "squash" as IntegrationStrategy }
       ], { title: `Integration strategy: ${task.title}` });
       if (!selection) return;
       const confirmed = await vscode.window.showWarningMessage(
-        `Integrate '${task.title}' into the currently checked-out target branch using ${selection.label}?`,
+        `Integrate the displayed changes for '${task.title}' into the current target using ${selection.label}?`,
         { modal: true },
         "Integrate"
       );
