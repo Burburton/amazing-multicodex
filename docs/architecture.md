@@ -1,7 +1,20 @@
 # Amazing MultiCodex Architecture
 
-Status: proposed baseline  
+Status: accepted baseline, incrementally implemented
 Last updated: 2026-08-15
+
+## Implementation status
+
+The module boundaries, task lifecycle, dependency-aware scheduler, Codex App
+Server adapter, Git worktrees, approvals, validation, review, and explicit
+integration workflows are implemented. Architecture dependencies are enforced
+by `scripts/check-architecture.js` in `npm run check`.
+
+Persistence currently uses VS Code `workspaceState` adapters behind repository
+ports. This is an intentional transitional implementation, not a change to the
+SQLite decision in section 10. Automatic lifecycle-driven dispatch,
+transactional persistence/outbox, full restart reconciliation, safe workspace
+cleanup, and the task-detail webview remain future increments.
 
 ## 1. Purpose
 
@@ -72,8 +85,9 @@ The rules are mandatory:
 7. Business state changes occur through application commands, not through UI
    mutation or adapter callbacks.
 
-These constraints should be enforced with ESLint import boundaries and
-architecture tests, rather than relying on convention alone.
+These constraints are enforced with automated architecture tests rather than
+relying on convention alone. ESLint import rules may be added as a second,
+editor-time feedback layer.
 
 ## 4. System boundary
 
@@ -645,4 +659,3 @@ A feature is not complete unless:
 - failures have typed codes and actionable recovery behavior;
 - lifecycle cleanup is explicit and safe;
 - the feature includes observability sufficient to explain its current state.
-
