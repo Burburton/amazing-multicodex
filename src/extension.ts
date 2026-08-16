@@ -11,6 +11,7 @@ import { AgentActivityBridge } from "./host/agentActivityBridge";
 import { ApprovalBridge } from "./host/approvalBridge";
 import { ActivityService } from "./modules/activity/public";
 import { ApprovalService } from "./modules/approvals/public";
+import { parseSettings } from "./modules/settings/public";
 import {
   AgentEventCoordinator,
   CancelTaskWorkflow,
@@ -104,8 +105,17 @@ export function activate(context: vscode.ExtensionContext): void {
         cancellable: false
       }, async () => {
         try {
+          const settings = readSettings();
+          if (!settings.ok) {
+            void vscode.window.showErrorMessage(settings.error.message);
+            return;
+          }
           await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(storage, "worktrees"));
-          const agent = await codex.start({ cwd: workspaceFolder.uri.fsPath });
+          const agent = await codex.start({
+            cwd: workspaceFolder.uri.fsPath,
+            executable: settings.value.codexExecutable,
+            requestTimeoutMs: settings.value.requestTimeoutMs
+          });
           coordinator?.stop();
           coordinator = new AgentEventCoordinator(agent, executions, lifecycle, clock, {
             error: (message, error) => console.error(message, error),
@@ -113,7 +123,7 @@ export function activate(context: vscode.ExtensionContext): void {
           });
           coordinator.start();
           activityBridge?.stop();
-          activityBridge = new AgentActivityBridge(agent, executions, activity, 32_000, {
+          activityBridge = new AgentActivityBridge(agent, executions, activity, settings.value.maxActivityCharacters, {
             error: (message, error) => console.error(message, error)
           });
           activityBridge.start();
@@ -132,7 +142,7 @@ export function activate(context: vscode.ExtensionContext): void {
             taskId: task.id,
             repositoryRoot: workspaceFolder.uri.fsPath,
             worktreeRoot: vscode.Uri.joinPath(storage, "worktrees").fsPath,
-            baseRef: "HEAD"
+            baseRef: settings.value.baseRef
           });
           tree.refresh();
           if (!started.ok) {
@@ -157,7 +167,16 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       try {
-        const agent = await codex.start({ cwd: workspaceFolder.uri.fsPath });
+        const settings = readSettings();
+        if (!settings.ok) {
+          void vscode.window.showErrorMessage(settings.error.message);
+          return;
+        }
+        const agent = await codex.start({
+          cwd: workspaceFolder.uri.fsPath,
+          executable: settings.value.codexExecutable,
+          requestTimeoutMs: settings.value.requestTimeoutMs
+        });
         coordinator?.stop();
         coordinator = new AgentEventCoordinator(agent, executions, lifecycle, clock, {
           error: (message, error) => console.error(message, error),
@@ -165,7 +184,7 @@ export function activate(context: vscode.ExtensionContext): void {
         });
         coordinator.start();
         activityBridge?.stop();
-        activityBridge = new AgentActivityBridge(agent, executions, activity, 32_000, {
+        activityBridge = new AgentActivityBridge(agent, executions, activity, settings.value.maxActivityCharacters, {
           error: (message, error) => console.error(message, error)
         });
         activityBridge.start();
@@ -237,6 +256,17 @@ export function activate(context: vscode.ExtensionContext): void {
         );
         return selection === "Approve" ? "approved" : selection === "Decline" ? "declined" : "cancelled";
       }
+    });
+  }
+
+  function readSettings(): ReturnType<typeof parseSettings> {
+    const config = vscode.workspace.getConfiguration("amazingMultiCodex");
+    return parseSettings({
+      codexExecutable: config.get<string>("codexExecutable"),
+      requestTimeoutMs: config.get<number>("requestTimeoutMs"),
+      baseRef: config.get<string>("baseRef"),
+      concurrencyLimit: config.get<number>("concurrencyLimit"),
+      maxActivityCharacters: config.get<number>("maxActivityCharacters")
     });
   }
 }

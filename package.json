@@ -26,6 +26,42 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Amazing MultiCodex",
+      "properties": {
+        "amazingMultiCodex.codexExecutable": {
+          "type": "string",
+          "default": "codex",
+          "description": "Codex CLI executable used to start App Server."
+        },
+        "amazingMultiCodex.requestTimeoutMs": {
+          "type": "integer",
+          "default": 30000,
+          "minimum": 1000,
+          "maximum": 300000,
+          "description": "Timeout for Codex App Server requests in milliseconds."
+        },
+        "amazingMultiCodex.baseRef": {
+          "type": "string",
+          "default": "HEAD",
+          "description": "Git ref used as the base for new task worktrees."
+        },
+        "amazingMultiCodex.concurrencyLimit": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 16,
+          "description": "Maximum number of concurrently running tasks."
+        },
+        "amazingMultiCodex.maxActivityCharacters": {
+          "type": "integer",
+          "default": 32000,
+          "minimum": 1000,
+          "maximum": 200000,
+          "description": "Maximum number of characters retained for one streamed agent message."
+        }
+      }
+    },
     "views": {
       "explorer": [
         {
