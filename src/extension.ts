@@ -14,7 +14,7 @@ import { ApprovalBridge } from "./host/approvalBridge";
 import { RuntimePreflight } from "./host/runtimePreflight";
 import { ActivityService } from "./modules/activity/public";
 import { ApprovalService } from "./modules/approvals/public";
-import { IntegrateTaskWorkflow, IntegrationStrategy } from "./modules/integration/public";
+import { IntegrateTaskWorkflow, IntegrationStrategy, RecoverIntegrationWorkflow } from "./modules/integration/public";
 import { ValidationCommandSetting, parseSettings } from "./modules/settings/public";
 import {
   AgentEventCoordinator,
@@ -88,6 +88,7 @@ export function activate(context: vscode.ExtensionContext): void {
     validate: "amazingMultiCodex.validateTask",
     changes: "amazingMultiCodex.showChanges",
     integrate: "amazingMultiCodex.integrateTask",
+    recoverIntegration: "amazingMultiCodex.recoverIntegration",
     release: "amazingMultiCodex.releaseWorkspace"
   };
   const taskDetails = new TaskDetailPanelManager(
@@ -507,6 +508,34 @@ export function activate(context: vscode.ExtensionContext): void {
       } else {
         void vscode.window.showInformationMessage(`Integrated MultiCodex task: ${task.title}`);
       }
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.recoverIntegration", async (task?: TaskProps) => {
+      if (!task) {
+        void vscode.window.showErrorMessage("Select a task left in the integrating state.");
+        return;
+      }
+      const selection = await vscode.window.showWarningMessage(
+        `Verify the target Git history for '${task.title}', then choose how to recover its interrupted integration state.`,
+        { modal: true },
+        "Mark Completed",
+        "Return to Review"
+      );
+      if (!selection) return;
+      const recovered = await new RecoverIntegrationWorkflow(lifecycle).execute(
+        task.id,
+        selection === "Mark Completed" ? "completed" : "retry"
+      );
+      tree.refresh();
+      await taskDetails.refresh(task.id);
+      if (!recovered.ok) {
+        void vscode.window.showErrorMessage(recovered.error.message);
+        return;
+      }
+      await activity.record({
+        taskId: task.id,
+        kind: "lifecycle",
+        summary: selection === "Mark Completed" ? "Integration recovery confirmed" : "Integration returned to review"
+      });
     }),
     vscode.commands.registerCommand("amazingMultiCodex.addDependency", async (task?: TaskProps) => {
       if (!task) {

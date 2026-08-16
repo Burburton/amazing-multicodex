@@ -30,6 +30,7 @@
     "onCommand:amazingMultiCodex.validateTask",
     "onCommand:amazingMultiCodex.showChanges",
     "onCommand:amazingMultiCodex.integrateTask",
+    "onCommand:amazingMultiCodex.recoverIntegration",
     "onCommand:amazingMultiCodex.addDependency",
     "onCommand:amazingMultiCodex.removeDependency",
     "onCommand:amazingMultiCodex.releaseWorkspace"
@@ -201,6 +202,11 @@
         "icon": "$(git-merge)"
       },
       {
+        "command": "amazingMultiCodex.recoverIntegration",
+        "title": "MultiCodex: Recover Interrupted Integration",
+        "icon": "$(history)"
+      },
+      {
         "command": "amazingMultiCodex.addDependency",
         "title": "MultiCodex: Add Prerequisite",
         "icon": "$(references)"
@@ -283,6 +289,11 @@
         {
           "command": "amazingMultiCodex.integrateTask",
           "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.readyForReview || viewItem == multicodexTask.blocked.integration)",
+          "group": "inline"
+        },
+        {
+          "command": "amazingMultiCodex.recoverIntegration",
+          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.integrating",
           "group": "inline"
         },
         {

@@ -4,10 +4,10 @@ import { TaskDetailProjection } from "../modules/orchestration/public";
 import { TaskId, TaskProps } from "../modules/tasks/public";
 import { taskPriorityLabel, taskStatusLabel } from "./taskPresentation";
 
-export type TaskDetailAction = "queue" | "start" | "resume" | "cancel" | "validate" | "changes" | "integrate" | "release";
+export type TaskDetailAction = "queue" | "start" | "resume" | "cancel" | "validate" | "changes" | "integrate" | "recoverIntegration" | "release";
 
 const allowedActions = new Set<TaskDetailAction>([
-  "queue", "start", "resume", "cancel", "validate", "changes", "integrate", "release"
+  "queue", "start", "resume", "cancel", "validate", "changes", "integrate", "recoverIntegration", "release"
 ]);
 
 export class TaskDetailPanelManager implements vscode.Disposable {
@@ -126,6 +126,7 @@ function actionsFor(status: TaskDetailProjection["task"]["status"], reason?: str
     case "awaitingApproval": return [{ id: "cancel", label: "Cancel" }];
     case "validating": return [{ id: "validate", label: "Run validation" }, { id: "changes", label: "View changes" }];
     case "readyForReview": return [{ id: "changes", label: "View changes" }, { id: "integrate", label: "Integrate" }];
+    case "integrating": return [{ id: "recoverIntegration", label: "Recover integration" }];
     case "completed": return [{ id: "changes", label: "View changes" }, { id: "release", label: "Release worktree" }];
     default: return [];
   }
