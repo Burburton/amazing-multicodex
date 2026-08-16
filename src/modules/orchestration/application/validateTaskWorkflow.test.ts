@@ -71,3 +71,29 @@ test("moves a successfully validated task to ready for review", async () => {
   assert.equal(found.ok && found.value?.snapshot().status, "readyForReview");
 });
 
+test("blocks a validating task when its execution record is missing", async () => {
+  const clock = new FixedClock();
+  const tasks = new InMemoryTaskRepository();
+  const task = Task.create({ id: "task-missing" as TaskId, title: "Task", now: clock.now() });
+  assert.equal(task.ok, true);
+  if (!task.ok) return;
+  for (const status of ["queued", "preparing", "running", "validating"] as const) {
+    task.value.transition(status, clock.now());
+  }
+  await tasks.save(task.value, -1);
+  const workflow = new ValidateTaskWorkflow(
+    new TaskLifecycleService(tasks, clock),
+    new InMemoryExecutionRepository(),
+    new RunValidationHandler(new PassingCommand(), clock, new FixedIds())
+  );
+
+  const result = await workflow.execute({ taskId: "task-missing" as TaskId, profile: {
+    id: "profile" as ValidationProfileId, mode: "sequential", checks: []
+  } });
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "execution.not-found");
+  const found = await tasks.findById("task-missing" as TaskId);
+  assert.equal(found.ok && found.value?.snapshot().status, "blocked");
+  if (found.ok && found.value) assert.equal(found.value.snapshot().statusReason, "execution.not-found");
+});

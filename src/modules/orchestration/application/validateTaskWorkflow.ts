@@ -21,8 +21,15 @@ export class ValidateTaskWorkflow {
     if (!task.ok) return task;
     if (task.value.status !== "validating") return err(notValidating(command.taskId, task.value.status));
     const execution = await this.executions.findLatestByTask(command.taskId);
-    if (!execution.ok) return execution;
-    if (!execution.value) return err(noExecution(command.taskId));
+    if (!execution.ok) {
+      await this.tasks.transition(command.taskId, "blocked", execution.error.code);
+      return execution;
+    }
+    if (!execution.value) {
+      const missing = noExecution(command.taskId);
+      await this.tasks.transition(command.taskId, "blocked", missing.code);
+      return err(missing);
+    }
     const run = await this.validation.execute({
       workspace: execution.value.workspace,
       profile: command.profile,
@@ -45,4 +52,3 @@ function notValidating(taskId: TaskId, status: string): AppError {
 function noExecution(taskId: TaskId): AppError {
   return { code: "execution.not-found", category: "validation", message: "No task execution was found for validation.", retryable: false, context: { taskId } };
 }
-
