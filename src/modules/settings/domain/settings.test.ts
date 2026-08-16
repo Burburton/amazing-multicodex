@@ -31,6 +31,14 @@ test("rejects validation timeouts outside the safe range", () => {
   if (!result.ok) assert.equal(result.error.code, "settings.validation-timeout");
 });
 
+test("rejects Git base refs that could be parsed as command options", () => {
+  for (const baseRef of ["--help", "-C", "main\n--help"]) {
+    const result = parseSettings({ baseRef });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error.code, "settings.base-ref");
+  }
+});
+
 test("returns typed errors for malformed runtime configuration shapes", () => {
   const executable = parseSettings({ codexExecutable: 42 } as never);
   assert.equal(executable.ok, false);

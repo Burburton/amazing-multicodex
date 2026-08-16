@@ -20,7 +20,7 @@ test("runtime preflight reports successful Codex and Git checks", async () => {
 
   assert.deepEqual(checks.map(check => check.ok), [true, true, true]);
   assert.equal(checks[0]?.detail, "codex-cli 1.2.3");
-  assert.deepEqual(runner.specs[2]?.args, ["rev-parse", "--verify", "HEAD^{commit}"]);
+  assert.deepEqual(runner.specs[2]?.args, ["rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"]);
 });
 
 test("runtime preflight isolates command failures", async () => {

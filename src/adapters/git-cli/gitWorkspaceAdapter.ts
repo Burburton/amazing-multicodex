@@ -23,7 +23,7 @@ export class GitWorkspaceAdapter implements WorkspacePort {
     if (path.resolve(verified.value.stdout.trim()) !== repository) {
       return err(gitError("workspace.repository-root-mismatch", "Configured repository root does not match Git."));
     }
-    const base = await this.git(repository, ["rev-parse", "--verify", `${input.baseRef}^{commit}`]);
+    const base = await this.git(repository, ["rev-parse", "--verify", "--end-of-options", `${input.baseRef}^{commit}`]);
     if (!base.ok) return base;
     const baseCommit = base.value.stdout.trim();
 

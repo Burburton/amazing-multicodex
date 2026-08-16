@@ -37,7 +37,7 @@ export class RuntimePreflight {
       this.check(
         "baseRef",
         "Git base ref",
-        { executable: "git", args: ["rev-parse", "--verify", `${options.baseRef}^{commit}`], cwd: options.cwd, maxOutputBytes: 4_096 },
+        { executable: "git", args: ["rev-parse", "--verify", "--end-of-options", `${options.baseRef}^{commit}`], cwd: options.cwd, maxOutputBytes: 4_096 },
         timeoutMs,
         () => `${options.baseRef} resolves to a commit.`
       )

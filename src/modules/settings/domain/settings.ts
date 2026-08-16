@@ -55,7 +55,14 @@ export function parseSettings(input: SettingsInput): Result<MultiCodexSettings> 
     validationCommands: input.validationCommands ?? defaultSettings.validationCommands
   };
   if (!value.codexExecutable.trim()) return err(settingError("settings.codex-executable", "Codex executable cannot be empty."));
-  if (!value.baseRef.trim()) return err(settingError("settings.base-ref", "Git base ref cannot be empty."));
+  const baseRef = value.baseRef.trim();
+  if (!baseRef) return err(settingError("settings.base-ref", "Git base ref cannot be empty."));
+  if (baseRef.startsWith("-") || /[\0\r\n]/.test(baseRef)) {
+    return err(settingError(
+      "settings.base-ref",
+      "Git base ref cannot start with '-' or contain control line breaks."
+    ));
+  }
   if (!Number.isInteger(value.concurrencyLimit) || value.concurrencyLimit < 1 || value.concurrencyLimit > 16) {
     return err(settingError("settings.concurrency-limit", "Concurrency limit must be an integer from 1 to 16."));
   }
@@ -74,7 +81,7 @@ export function parseSettings(input: SettingsInput): Result<MultiCodexSettings> 
   return ok({
     ...value,
     codexExecutable: value.codexExecutable.trim(),
-    baseRef: value.baseRef.trim()
+    baseRef
   });
 }
 
