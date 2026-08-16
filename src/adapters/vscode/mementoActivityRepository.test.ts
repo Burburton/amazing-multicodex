@@ -7,6 +7,7 @@ import { MementoActivityRepository } from "./mementoActivityRepository";
 
 class FakeState implements KeyValueState {
   private readonly values = new Map<string, unknown>();
+  constructor(value?: unknown) { if (value !== undefined) this.values.set("amazingMultiCodex.activity.v1", value); }
   get<T>(key: string, defaultValue: T): T { return (this.values.get(key) as T | undefined) ?? defaultValue; }
   update(key: string, value: unknown): Thenable<void> { this.values.set(key, value); return Promise.resolve(); }
 }
@@ -29,3 +30,9 @@ test("assigns ordered sequences and returns newest activity first", async () => 
   assert.deepEqual(records.value.map(record => record.sequence), [2, 1]);
 });
 
+test("returns a typed error for malformed stored activity", async () => {
+  const repository = new MementoActivityRepository(new FakeState([{ summary: "missing fields" }]));
+  const records = await repository.listByTask("task-1" as TaskId);
+  assert.equal(records.ok, false);
+  if (!records.ok) assert.equal(records.error.code, "activity.state-invalid");
+});

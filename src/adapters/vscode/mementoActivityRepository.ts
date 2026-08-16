@@ -19,12 +19,13 @@ export class MementoActivityRepository implements ActivityRepository {
 
   async append(record: NewActivityRecord): Promise<Result<ActivityRecord>> {
     const records = this.records();
-    const sequence = (records.at(-1)?.sequence ?? 0) + 1;
+    if (!records.ok) return records;
+    const sequence = (records.value.at(-1)?.sequence ?? 0) + 1;
     const complete: ActivityRecord = { ...record, sequence };
-    records.push({ ...complete, occurredAt: complete.occurredAt.toISOString() });
-    if (records.length > MAX_RECORDS) records.splice(0, records.length - MAX_RECORDS);
+    records.value.push({ ...complete, occurredAt: complete.occurredAt.toISOString() });
+    if (records.value.length > MAX_RECORDS) records.value.splice(0, records.value.length - MAX_RECORDS);
     try {
-      await this.state.update(STORAGE_KEY, records);
+      await this.state.update(STORAGE_KEY, records.value);
       return ok(complete);
     } catch (cause) {
       return err(persistenceError(cause));
@@ -33,16 +34,42 @@ export class MementoActivityRepository implements ActivityRepository {
 
   async listByTask(taskId: TaskId, limit = 100): Promise<Result<readonly ActivityRecord[]>> {
     const bounded = Math.max(0, Math.min(limit, 500));
-    return ok(this.records()
+    const records = this.records();
+    if (!records.ok) return records;
+    return ok(records.value
       .filter(record => record.taskId === taskId)
       .slice(-bounded)
       .reverse()
       .map(record => ({ ...record, occurredAt: new Date(record.occurredAt) })));
   }
 
-  private records(): StoredActivity[] {
-    return [...this.state.get<StoredActivity[]>(STORAGE_KEY, [])];
+  private records(): Result<StoredActivity[]> {
+    try {
+      const stored = this.state.get<unknown>(STORAGE_KEY, []);
+      if (!Array.isArray(stored) || !stored.every(isStoredActivity)) return err(corruptState());
+      return ok([...stored]);
+    } catch (cause) {
+      return err(persistenceError(cause));
+    }
   }
+}
+
+function isStoredActivity(value: unknown): value is StoredActivity {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.id === "string" && typeof record.taskId === "string"
+    && ["agentMessage", "tool", "approval", "validation", "lifecycle", "error"].includes(String(record.kind))
+    && typeof record.summary === "string"
+    && (record.detail === undefined || typeof record.detail === "string")
+    && typeof record.occurredAt === "string" && !Number.isNaN(Date.parse(record.occurredAt))
+    && typeof record.sequence === "number" && Number.isInteger(record.sequence) && record.sequence > 0;
+}
+
+function corruptState(): AppError {
+  return {
+    code: "activity.state-invalid", category: "internal",
+    message: "Stored activity state is invalid.", retryable: false
+  };
 }
 
 function persistenceError(cause: unknown): AppError {
@@ -54,4 +81,3 @@ function persistenceError(cause: unknown): AppError {
     cause
   };
 }
-
