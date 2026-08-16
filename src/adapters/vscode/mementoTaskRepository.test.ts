@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Task, TaskId } from "../../modules/tasks/public";
-import { KeyValueState, MementoTaskRepository } from "./mementoTaskRepository";
+import { KeyValueState } from "../../shared/ports/keyValueState";
+import { MementoTaskRepository } from "./mementoTaskRepository";
 
 class FakeState implements KeyValueState {
   private readonly values = new Map<string, unknown>();
@@ -25,4 +26,3 @@ test("round-trips tasks without leaking serialized date representation", async (
   assert.equal(found.value.snapshot().createdAt instanceof Date, true);
   assert.equal(found.value.snapshot().title, "Persist me");
 });
-

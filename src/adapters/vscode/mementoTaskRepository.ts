@@ -1,10 +1,6 @@
 import { AppError, Result, err, ok } from "../../shared/core/result";
+import { KeyValueState } from "../../shared/ports/keyValueState";
 import { Task, TaskId, TaskProps, TaskRepository } from "../../modules/tasks/public";
-
-export interface KeyValueState {
-  get<T>(key: string, defaultValue: T): T;
-  update(key: string, value: unknown): Thenable<void>;
-}
 
 interface StoredTask extends Omit<TaskProps, "createdAt" | "updatedAt"> {
   readonly createdAt: string;
@@ -70,4 +66,3 @@ function conflict(id: TaskId, expected: number, actual: number): AppError {
     context: { id, expected: String(expected), actual: String(actual) }
   };
 }
-

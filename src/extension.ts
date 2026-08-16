@@ -3,8 +3,8 @@ import { CodexProcessSupervisor } from "./adapters/codex-app-server/codexProcess
 import { GitWorkspaceAdapter } from "./adapters/git-cli/gitWorkspaceAdapter";
 import { NodeCommandRunner } from "./adapters/process/nodeCommandRunner";
 import { NodeProcessFactory } from "./adapters/process/nodeProcessFactory";
+import { MementoExecutionRepository } from "./adapters/vscode/mementoExecutionRepository";
 import { MementoTaskRepository } from "./adapters/vscode/mementoTaskRepository";
-import { InMemoryExecutionRepository } from "./modules/orchestration/adapters/inMemoryExecutionRepository";
 import { AgentEventCoordinator, StartTaskWorkflow } from "./modules/orchestration/public";
 import { CreateTaskHandler, TaskLifecycleService, TaskProps } from "./modules/tasks/public";
 import { SystemClock } from "./shared/core/clock";
@@ -24,7 +24,7 @@ export function activate(context: vscode.ExtensionContext): void {
     exited: exit => console.info("Codex App Server exited", exit),
     processError: error => console.error("Codex App Server error", error)
   });
-  const executions = new InMemoryExecutionRepository();
+  const executions = new MementoExecutionRepository(context.workspaceState);
   let coordinator: AgentEventCoordinator | undefined;
 
   context.subscriptions.push(
