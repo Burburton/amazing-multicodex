@@ -108,3 +108,19 @@ Search VS Code Settings for `Amazing MultiCodex` to configure the Codex
 executable, default model, base ref, concurrency limit, timeouts, and ordered
 validation commands. Commit or stash unrelated local changes before integrating
 a completed task; integration intentionally requires a clean target repository.
+
+## Troubleshooting
+
+- Run `MultiCodex: Show Runtime Status` first. Each failed check offers the
+  relevant settings or workspace action; a missing Codex CLI, non-Git folder,
+  and unresolved base ref are reported separately.
+- If Codex exits or VS Code reloads while a task is running, open that task and
+  choose `Reconnect / Resume`. The existing worktree and Codex thread identity
+  are retained in workspace storage.
+- If integration says the target is dirty, commit or stash changes in the main
+  repository and retry. MultiCodex never discards unrelated target changes.
+- Cancelling validation stops the validation process tree and leaves the task
+  ready to validate again. A timed-out check is reported as a failure instead.
+- A blocked integration can be retried after fixing the cause. If Git already
+  integrated the commit before the extension was interrupted, use
+  `Recover Interrupted Integration` after verifying the target history.
