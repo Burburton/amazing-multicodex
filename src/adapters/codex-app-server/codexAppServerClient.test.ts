@@ -114,3 +114,28 @@ test("rejects malformed thread responses with a typed protocol error", async () 
   peer.receive({ id: request.id, result: { thread: {} } });
   await assert.rejects(started, error => (error as { code?: string }).code === "codex.invalid-response");
 });
+
+test("rejects oversized runtime identities before they enter execution state", async () => {
+  const { client, peer, transport } = await initializedClient();
+  const started = client.start({ prompt: "Implement it", cwd: "/repo" });
+  const request = latestRequest(transport);
+  peer.receive({ id: request.id, result: { thread: { id: "x".repeat(1_001) } } });
+  await assert.rejects(started, error => (error as { code?: string }).code === "codex.invalid-response");
+});
+
+test("bounds agent deltas and ignores notifications with oversized identities", async () => {
+  const { client, peer } = await initializedClient();
+  const events: AgentRuntimeEvent[] = [];
+  client.subscribe(event => events.push(event));
+  peer.receive({
+    method: "item/agentMessage/delta",
+    params: { threadId: "thread-1", turnId: "turn-1", delta: "x".repeat(200_001) }
+  });
+  peer.receive({
+    method: "turn/started",
+    params: { threadId: "x".repeat(1_001), turn: { id: "turn-1" } }
+  });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "agentMessageDelta");
+  if (events[0].type === "agentMessageDelta") assert.equal(events[0].delta.length, 200_000);
+});

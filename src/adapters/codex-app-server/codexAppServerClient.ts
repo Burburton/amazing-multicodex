@@ -39,6 +39,8 @@ const approvalMethods = [
   "item/commandExecution/requestApproval",
   "item/fileChange/requestApproval"
 ] as const;
+const MAX_RUNTIME_ID_CHARACTERS = 1_000;
+const MAX_AGENT_DELTA_CHARACTERS = 200_000;
 
 export class CodexAppServerClient implements AgentRuntimePort {
   private readonly listeners = new Set<AgentEventListener>();
@@ -149,8 +151,8 @@ export class CodexAppServerClient implements AgentRuntimePort {
 
   private mapTurnStarted(params: unknown): void {
     const value = envelope(params);
-    const threadId = stringValue(value.threadId);
-    const turnId = stringValue(value.turn?.id);
+    const threadId = boundedString(value.threadId, MAX_RUNTIME_ID_CHARACTERS);
+    const turnId = boundedString(value.turn?.id, MAX_RUNTIME_ID_CHARACTERS);
     if (threadId && turnId) this.publish({
       type: "turnStarted",
       threadId: threadId as AgentThreadId,
@@ -160,9 +162,10 @@ export class CodexAppServerClient implements AgentRuntimePort {
 
   private mapAgentDelta(params: unknown): void {
     const value = envelope(params);
-    const threadId = stringValue(value.threadId);
-    const turnId = stringValue(value.turnId);
-    const delta = stringValue(value.delta);
+    const threadId = boundedString(value.threadId, MAX_RUNTIME_ID_CHARACTERS);
+    const turnId = boundedString(value.turnId, MAX_RUNTIME_ID_CHARACTERS);
+    const rawDelta = stringValue(value.delta);
+    const delta = rawDelta?.slice(-MAX_AGENT_DELTA_CHARACTERS);
     if (threadId && turnId && delta !== undefined) this.publish({
       type: "agentMessageDelta",
       threadId: threadId as AgentThreadId,
@@ -173,8 +176,8 @@ export class CodexAppServerClient implements AgentRuntimePort {
 
   private mapItem(type: "itemStarted" | "itemCompleted", params: unknown): void {
     const value = envelope(params);
-    const threadId = stringValue(value.threadId);
-    const turnId = stringValue(value.turnId);
+    const threadId = boundedString(value.threadId, MAX_RUNTIME_ID_CHARACTERS);
+    const turnId = boundedString(value.turnId, MAX_RUNTIME_ID_CHARACTERS);
     if (threadId && turnId) this.publish({
       type,
       threadId: threadId as AgentThreadId,
@@ -185,13 +188,13 @@ export class CodexAppServerClient implements AgentRuntimePort {
 
   private mapTurnCompleted(params: unknown): void {
     const value = envelope(params);
-    const threadId = stringValue(value.threadId);
-    const turnId = stringValue(value.turn?.id);
+    const threadId = boundedString(value.threadId, MAX_RUNTIME_ID_CHARACTERS);
+    const turnId = boundedString(value.turn?.id, MAX_RUNTIME_ID_CHARACTERS);
     if (threadId && turnId) this.publish({
       type: "turnCompleted",
       threadId: threadId as AgentThreadId,
       turnId: turnId as AgentTurnId,
-      status: stringValue(value.turn?.status) ?? "unknown",
+      status: boundedString(value.turn?.status, 100) ?? "unknown",
       error: value.turn?.error
     });
   }
@@ -212,8 +215,8 @@ export class CodexAppServerClient implements AgentRuntimePort {
     const request: AgentApprovalRequest = {
       requestId: `${method}:${Date.now()}:${Math.random().toString(36).slice(2)}`,
       method,
-      threadId: stringValue(value.threadId) as AgentThreadId | undefined,
-      turnId: stringValue(value.turnId) as AgentTurnId | undefined,
+      threadId: boundedString(value.threadId, MAX_RUNTIME_ID_CHARACTERS) as AgentThreadId | undefined,
+      turnId: boundedString(value.turnId, MAX_RUNTIME_ID_CHARACTERS) as AgentTurnId | undefined,
       payload: params
     };
     return this.approvalHandler(request);
@@ -232,6 +235,7 @@ function initializeResult(value: unknown): InitializeResult {
   if (!value || typeof value !== "object") throw invalidResponse("initialize");
   const userAgent = (value as Record<string, unknown>).userAgent;
   if (userAgent !== undefined && typeof userAgent !== "string") throw invalidResponse("initialize");
+  if (typeof userAgent === "string" && userAgent.length > 1_000) throw invalidResponse("initialize");
   return { userAgent };
 }
 
@@ -252,7 +256,7 @@ function nestedId(value: unknown, key: string): string | undefined {
   const nested = (value as Record<string, unknown>)[key];
   if (!nested || typeof nested !== "object") return undefined;
   const id = (nested as Record<string, unknown>).id;
-  return typeof id === "string" && id.length > 0 ? id : undefined;
+  return boundedString(id, MAX_RUNTIME_ID_CHARACTERS);
 }
 
 function invalidResponse(method: string): AppError {
@@ -267,4 +271,8 @@ function invalidResponse(method: string): AppError {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+function boundedString(value: unknown, maxCharacters: number): string | undefined {
+  return typeof value === "string" && value.length > 0 && value.length <= maxCharacters ? value : undefined;
 }
