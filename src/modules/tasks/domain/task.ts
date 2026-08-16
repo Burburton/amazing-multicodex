@@ -41,6 +41,14 @@ export interface NewTaskProps {
   readonly now: Date;
 }
 
+export interface ReviseTaskProps {
+  readonly title: string;
+  readonly description?: string;
+  readonly acceptanceCriteria: readonly string[];
+  readonly priority: TaskPriority;
+  readonly now: Date;
+}
+
 const transitions: Readonly<Record<TaskStatus, readonly TaskStatus[]>> = {
   draft: ["queued", "cancelled"],
   queued: ["preparing", "cancelled"],
@@ -64,41 +72,11 @@ export class Task {
   private constructor(private props: TaskProps) {}
 
   static create(input: NewTaskProps): Result<Task> {
-    const title = input.title.trim();
-    if (title.length === 0) {
-      return err(taskError("task.title-required", "Task title is required."));
-    }
-    if (title.length > 200) {
-      return err(taskError("task.title-too-long", "Task title cannot exceed 200 characters."));
-    }
-    const description = normalizeOptional(input.description);
-    if (description && description.length > MAX_DESCRIPTION_CHARACTERS) {
-      return err(taskError(
-        "task.description-too-long",
-        `Task description cannot exceed ${MAX_DESCRIPTION_CHARACTERS.toLocaleString()} characters.`
-      ));
-    }
-    if ((input.acceptanceCriteria?.length ?? 0) > MAX_ACCEPTANCE_CRITERIA) {
-      return err(taskError(
-        "task.criteria-too-many",
-        `A task cannot have more than ${MAX_ACCEPTANCE_CRITERIA} acceptance criteria.`
-      ));
-    }
-    const acceptanceCriteria = (input.acceptanceCriteria ?? [])
-      .map(item => item.trim())
-      .filter(Boolean);
-    if (acceptanceCriteria.some(item => item.length > MAX_CRITERION_CHARACTERS)) {
-      return err(taskError(
-        "task.criterion-too-long",
-        `Each acceptance criterion cannot exceed ${MAX_CRITERION_CHARACTERS.toLocaleString()} characters.`
-      ));
-    }
-
+    const definition = normalizeDefinition(input);
+    if (!definition.ok) return definition;
     return ok(new Task({
       id: input.id,
-      title,
-      description,
-      acceptanceCriteria,
+      ...definition.value,
       priority: input.priority ?? "normal",
       status: "draft",
       createdAt: input.now,
@@ -113,6 +91,22 @@ export class Task {
 
   snapshot(): TaskProps {
     return { ...this.props, acceptanceCriteria: [...this.props.acceptanceCriteria] };
+  }
+
+  revise(input: ReviseTaskProps): Result<void> {
+    if (this.props.status !== "draft") {
+      return err(taskError("task.revision-locked", "Only draft tasks can be edited."));
+    }
+    const definition = normalizeDefinition(input);
+    if (!definition.ok) return definition;
+    this.props = {
+      ...this.props,
+      ...definition.value,
+      priority: input.priority,
+      updatedAt: input.now,
+      version: this.props.version + 1
+    };
+    return ok(undefined);
   }
 
   transition(next: TaskStatus, now: Date, reason?: string): Result<void> {
@@ -133,6 +127,44 @@ export class Task {
     };
     return ok(undefined);
   }
+}
+
+function normalizeDefinition(input: {
+  readonly title: string;
+  readonly description?: string;
+  readonly acceptanceCriteria?: readonly string[];
+}): Result<Pick<TaskProps, "title" | "description" | "acceptanceCriteria">> {
+  const title = input.title.trim();
+  if (title.length === 0) {
+    return err(taskError("task.title-required", "Task title is required."));
+  }
+  if (title.length > 200) {
+    return err(taskError("task.title-too-long", "Task title cannot exceed 200 characters."));
+  }
+  const description = normalizeOptional(input.description);
+  if (description && description.length > MAX_DESCRIPTION_CHARACTERS) {
+    return err(taskError(
+      "task.description-too-long",
+      `Task description cannot exceed ${MAX_DESCRIPTION_CHARACTERS.toLocaleString()} characters.`
+    ));
+  }
+  if ((input.acceptanceCriteria?.length ?? 0) > MAX_ACCEPTANCE_CRITERIA) {
+    return err(taskError(
+      "task.criteria-too-many",
+      `A task cannot have more than ${MAX_ACCEPTANCE_CRITERIA} acceptance criteria.`
+    ));
+  }
+  const acceptanceCriteria = (input.acceptanceCriteria ?? [])
+    .map(item => item.trim())
+    .filter(Boolean);
+  if (acceptanceCriteria.some(item => item.length > MAX_CRITERION_CHARACTERS)) {
+    return err(taskError(
+      "task.criterion-too-long",
+      `Each acceptance criterion cannot exceed ${MAX_CRITERION_CHARACTERS.toLocaleString()} characters.`
+    ));
+  }
+
+  return ok({ title, description, acceptanceCriteria });
 }
 
 function normalizeOptional(value: string | undefined): string | undefined {

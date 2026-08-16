@@ -33,6 +33,7 @@ import {
 } from "./modules/orchestration/public";
 import {
   CreateTaskHandler,
+  ReviseTaskHandler,
   TaskDependencyService,
   TaskLifecycleService,
   TaskPriority,
@@ -55,6 +56,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const repository = new MementoTaskRepository(context.workspaceState);
   const clock = new SystemClock();
   const createTask = new CreateTaskHandler(repository, clock, new CryptoIdGenerator());
+  const reviseTask = new ReviseTaskHandler(repository, clock);
   const lifecycle = new TaskLifecycleService(repository, clock);
   const dependencies = new TaskDependencyService(
     new MementoTaskDependencyRepository(context.workspaceState), repository
@@ -91,6 +93,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   const taskDetailQuery = new TaskDetailQuery(lifecycle, dependencies, executions, activity);
   const detailCommands: Readonly<Record<TaskDetailAction, string>> = {
+    edit: "amazingMultiCodex.editTask",
     queue: "amazingMultiCodex.queueTask",
     start: "amazingMultiCodex.startTask",
     resume: "amazingMultiCodex.resumeTask",
@@ -202,6 +205,62 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand("amazingMultiCodex.refreshTasks", () => {
       tree.refresh();
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.editTask", async (task?: TaskProps) => {
+      task = await selectTask(task, candidate => candidate.status === "draft", "Edit a draft task");
+      if (!task) return;
+      const title = await vscode.window.showInputBox({
+        prompt: "Edit the task title",
+        value: task.title,
+        validateInput: value => !value.trim()
+          ? "Task title is required."
+          : value.trim().length > 200 ? "Task title cannot exceed 200 characters." : undefined
+      });
+      if (!title?.trim()) return;
+      const description = await vscode.window.showInputBox({
+        prompt: "Edit task context",
+        value: task.description ?? "",
+        validateInput: value => value.trim().length > 20_000
+          ? "Task context cannot exceed 20,000 characters."
+          : undefined
+      });
+      if (description === undefined) return;
+      const criteriaInput = await vscode.window.showInputBox({
+        prompt: "Edit acceptance criteria (separate multiple items with semicolons)",
+        value: task.acceptanceCriteria.join("; "),
+        validateInput: validateAcceptanceCriteriaInput
+      });
+      if (criteriaInput === undefined) return;
+      const priorityChoices: Array<{
+        label: string;
+        description: string;
+        priority: TaskPriority;
+      }> = [
+        { label: "Normal", description: "Default scheduling priority", priority: "normal" },
+        { label: "High", description: "Run before normal and low tasks", priority: "high" },
+        { label: "Urgent", description: "Run before all other queued tasks", priority: "urgent" },
+        { label: "Low", description: "Run after normal tasks", priority: "low" }
+      ];
+      const currentPriority = priorityChoices.find(choice => choice.priority === task.priority)!;
+      const priority = await vscode.window.showQuickPick([
+        { ...currentPriority, description: `${currentPriority.description} · Current` },
+        ...priorityChoices.filter(choice => choice.priority !== task.priority)
+      ], { placeHolder: "Choose a scheduling priority" });
+      if (!priority) return;
+      const revised = await reviseTask.execute({
+        taskId: task.id,
+        title,
+        description,
+        acceptanceCriteria: criteriaInput.split(";").map(item => item.trim()).filter(Boolean),
+        priority: priority.priority
+      });
+      if (!revised.ok) {
+        void vscode.window.showErrorMessage(revised.error.message);
+        return;
+      }
+      tree.refresh();
+      await taskDetails.refresh(task.id);
+      void vscode.window.showInformationMessage(`Updated MultiCodex draft: ${revised.value.title}`);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.showRuntimeStatus", async () => {
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];

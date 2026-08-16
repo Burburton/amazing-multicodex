@@ -59,6 +59,37 @@ test("increments version for valid transitions", () => {
   assert.equal(result.value.snapshot().version, 1);
 });
 
+test("revises normalized draft fields and locks them after queueing", () => {
+  const result = Task.create({ id: "task-1" as TaskId, title: "Original", now });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const revised = result.value.revise({
+    title: "  Revised  ",
+    description: "  More context  ",
+    acceptanceCriteria: ["  Works  "],
+    priority: "high",
+    now: new Date("2026-08-15T13:00:00Z")
+  });
+  assert.equal(revised.ok, true);
+  assert.deepEqual(result.value.snapshot(), {
+    id: "task-1",
+    title: "Revised",
+    description: "More context",
+    acceptanceCriteria: ["Works"],
+    priority: "high",
+    status: "draft",
+    createdAt: now,
+    updatedAt: new Date("2026-08-15T13:00:00Z"),
+    version: 1
+  });
+  assert.equal(result.value.transition("queued", now).ok, true);
+  const locked = result.value.revise({
+    title: "Too late", acceptanceCriteria: [], priority: "normal", now
+  });
+  assert.equal(locked.ok, false);
+  if (!locked.ok) assert.equal(locked.error.code, "task.revision-locked");
+});
+
 test("allows an integration-blocked task to return to review", () => {
   const result = Task.create({ id: "task-1" as TaskId, title: "Build it", now });
   assert.equal(result.ok, true);

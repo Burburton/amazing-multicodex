@@ -4,10 +4,10 @@ import { TaskDetailProjection } from "../modules/orchestration/public";
 import { TaskId, TaskProps } from "../modules/tasks/public";
 import { taskPriorityLabel, taskStatusLabel } from "./taskPresentation";
 
-export type TaskDetailAction = "queue" | "start" | "resume" | "cancel" | "validate" | "changes" | "integrate" | "recoverIntegration" | "release";
+export type TaskDetailAction = "edit" | "queue" | "start" | "resume" | "cancel" | "validate" | "changes" | "integrate" | "recoverIntegration" | "release";
 
 const allowedActions = new Set<TaskDetailAction>([
-  "queue", "start", "resume", "cancel", "validate", "changes", "integrate", "recoverIntegration", "release"
+  "edit", "queue", "start", "resume", "cancel", "validate", "changes", "integrate", "recoverIntegration", "release"
 ]);
 
 export class TaskDetailPanelManager implements vscode.Disposable {
@@ -117,7 +117,8 @@ ${task.description ? `<p>${escapeHtml(task.description)}</p>` : ""}${statusReaso
 
 function actionsFor(status: TaskDetailProjection["task"]["status"], reason?: string): readonly { id: TaskDetailAction; label: string }[] {
   switch (status) {
-    case "draft": case "failed": case "cancelled": return [{ id: "queue", label: "Queue task" }];
+    case "draft": return [{ id: "edit", label: "Edit draft" }, { id: "queue", label: "Queue task" }];
+    case "failed": case "cancelled": return [{ id: "queue", label: "Queue task" }];
     case "blocked": return reason?.startsWith("integration.")
       ? [{ id: "integrate", label: "Retry integration" }]
       : [{ id: "queue", label: "Retry task" }];

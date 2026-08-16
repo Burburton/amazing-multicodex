@@ -90,7 +90,8 @@ Palette (`Ctrl/Cmd+Shift+P`) under `MultiCodex:` and prompt for an eligible task
 
 The normal task flow is:
 
-1. Create a draft with a title, context, acceptance criteria, and priority.
+1. Create and, if needed, edit a draft with a title, context, acceptance
+   criteria, and priority.
 2. Optionally add prerequisites while the task is still a draft.
 3. Queue the task. Ready tasks dispatch automatically up to the configured
    concurrency limit.
