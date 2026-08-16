@@ -15,7 +15,8 @@ export class AgentActivityBridge {
     private readonly executions: ExecutionRepository,
     private readonly activity: ActivityService,
     private readonly maxMessageCharacters = 32_000,
-    private readonly diagnostics: ActivityBridgeDiagnostics = { error: () => undefined }
+    private readonly diagnostics: ActivityBridgeDiagnostics = { error: () => undefined },
+    private readonly maxBufferedTurns = 128
   ) {}
 
   start(): void {
@@ -32,6 +33,10 @@ export class AgentActivityBridge {
     const key = `${event.threadId}:${event.turnId}`;
     if (event.type === "agentMessageDelta") {
       const current = this.messageBuffers.get(key) ?? "";
+      if (!current && !this.messageBuffers.has(key) && this.messageBuffers.size >= this.maxBufferedTurns) {
+        const oldest = this.messageBuffers.keys().next().value as string | undefined;
+        if (oldest) this.messageBuffers.delete(oldest);
+      }
       this.messageBuffers.set(key, (current + event.delta).slice(-this.maxMessageCharacters));
       return;
     }
