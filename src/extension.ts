@@ -128,20 +128,7 @@ export function activate(context: vscode.ExtensionContext): void {
             executable: settings.value.codexExecutable,
             requestTimeoutMs: settings.value.requestTimeoutMs
           });
-          coordinator?.stop();
-          coordinator = new AgentEventCoordinator(agent, executions, lifecycle, clock, {
-            error: (message, error) => console.error(message, error),
-            taskChanged: () => tree.refresh()
-          });
-          coordinator.start();
-          activityBridge?.stop();
-          activityBridge = new AgentActivityBridge(agent, executions, activity, settings.value.maxActivityCharacters, {
-            error: (message, error) => console.error(message, error)
-          });
-          activityBridge.start();
-          approvalBridge?.stop();
-          approvalBridge = createApprovalBridge(agent);
-          approvalBridge.start();
+          bindAgent(agent, settings.value.maxActivityCharacters);
           const starter = new StartTaskWorkflow(
             lifecycle, new GitWorkspaceAdapter(new NodeCommandRunner()), agent,
             executions, clock, ids, capacity, dependencies
@@ -202,20 +189,7 @@ export function activate(context: vscode.ExtensionContext): void {
             executable: settings.value.codexExecutable,
             requestTimeoutMs: settings.value.requestTimeoutMs
           });
-          coordinator?.stop();
-          coordinator = new AgentEventCoordinator(agent, executions, lifecycle, clock, {
-            error: (message, error) => console.error(message, error),
-            taskChanged: () => tree.refresh()
-          });
-          coordinator.start();
-          activityBridge?.stop();
-          activityBridge = new AgentActivityBridge(agent, executions, activity, settings.value.maxActivityCharacters, {
-            error: (message, error) => console.error(message, error)
-          });
-          activityBridge.start();
-          approvalBridge?.stop();
-          approvalBridge = createApprovalBridge(agent);
-          approvalBridge.start();
+          bindAgent(agent, settings.value.maxActivityCharacters);
           const workflow = new StartTaskWorkflow(
             lifecycle,
             new GitWorkspaceAdapter(new NodeCommandRunner()),
@@ -266,20 +240,7 @@ export function activate(context: vscode.ExtensionContext): void {
           executable: settings.value.codexExecutable,
           requestTimeoutMs: settings.value.requestTimeoutMs
         });
-        coordinator?.stop();
-        coordinator = new AgentEventCoordinator(agent, executions, lifecycle, clock, {
-          error: (message, error) => console.error(message, error),
-          taskChanged: () => tree.refresh()
-        });
-        coordinator.start();
-        activityBridge?.stop();
-        activityBridge = new AgentActivityBridge(agent, executions, activity, settings.value.maxActivityCharacters, {
-          error: (message, error) => console.error(message, error)
-        });
-        activityBridge.start();
-        approvalBridge?.stop();
-        approvalBridge = createApprovalBridge(agent);
-        approvalBridge.start();
+        bindAgent(agent, settings.value.maxActivityCharacters);
         const resumed = await new ResumeTaskWorkflow(lifecycle, agent, executions, clock)
           .execute({ taskId: task.id });
         if (!resumed.ok) {
@@ -472,6 +433,26 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showInformationMessage(`Added prerequisite '${selected.label}' to '${task.title}'.`);
     })
   );
+
+  function bindAgent(
+    agent: Awaited<ReturnType<CodexProcessSupervisor["start"]>>,
+    maxActivityCharacters: number
+  ): void {
+    coordinator?.stop();
+    coordinator = new AgentEventCoordinator(agent, executions, lifecycle, clock, {
+      error: (message, error) => console.error(message, error),
+      taskChanged: () => tree.refresh()
+    });
+    coordinator.start();
+    activityBridge?.stop();
+    activityBridge = new AgentActivityBridge(agent, executions, activity, maxActivityCharacters, {
+      error: (message, error) => console.error(message, error)
+    });
+    activityBridge.start();
+    approvalBridge?.stop();
+    approvalBridge = createApprovalBridge(agent);
+    approvalBridge.start();
+  }
 
   function createApprovalBridge(agent: Awaited<ReturnType<CodexProcessSupervisor["start"]>>): ApprovalBridge {
     return new ApprovalBridge(agent, executions, approvals, lifecycle, {
