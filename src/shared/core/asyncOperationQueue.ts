@@ -1,4 +1,4 @@
-export class AsyncWriteQueue {
+export class AsyncOperationQueue {
   private tail: Promise<void> = Promise.resolve();
 
   run<T>(operation: () => Promise<T>): Promise<T> {

@@ -6,7 +6,7 @@ import {
   NewActivityRecord
 } from "../../modules/activity/public";
 import { TaskId } from "../../modules/tasks/public";
-import { AsyncWriteQueue } from "./asyncWriteQueue";
+import { AsyncOperationQueue } from "../../shared/core/asyncOperationQueue";
 
 interface StoredActivity extends Omit<ActivityRecord, "occurredAt"> {
   readonly occurredAt: string;
@@ -16,7 +16,7 @@ const STORAGE_KEY = "amazingMultiCodex.activity.v1";
 const MAX_RECORDS = 2_000;
 
 export class MementoActivityRepository implements ActivityRepository {
-  private readonly writes = new AsyncWriteQueue();
+  private readonly writes = new AsyncOperationQueue();
   constructor(private readonly state: KeyValueState) {}
 
   async append(record: NewActivityRecord): Promise<Result<ActivityRecord>> {

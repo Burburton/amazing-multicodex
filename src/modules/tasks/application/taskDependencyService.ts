@@ -1,16 +1,22 @@
 import { AppError, Result, err, ok } from "../../../shared/core/result";
+import { AsyncOperationQueue } from "../../../shared/core/asyncOperationQueue";
 import { TaskDependencyGraph } from "../domain/dependencyGraph";
 import { TaskId } from "../domain/task";
 import { TaskDependency, TaskDependencyRepository } from "../ports/taskDependencyRepository";
 import { TaskRepository } from "../ports/taskRepository";
 
 export class TaskDependencyService {
+  private readonly mutations = new AsyncOperationQueue();
   constructor(
     private readonly dependencies: TaskDependencyRepository,
     private readonly tasks: TaskRepository
   ) {}
 
   async add(taskId: TaskId, prerequisiteId: TaskId): Promise<Result<void>> {
+    return this.mutations.run(() => this.addOnce(taskId, prerequisiteId));
+  }
+
+  private async addOnce(taskId: TaskId, prerequisiteId: TaskId): Promise<Result<void>> {
     const [task, prerequisite] = await Promise.all([
       this.tasks.findById(taskId),
       this.tasks.findById(prerequisiteId)
@@ -28,6 +34,10 @@ export class TaskDependencyService {
   }
 
   async remove(taskId: TaskId, prerequisiteId: TaskId): Promise<Result<void>> {
+    return this.mutations.run(() => this.removeOnce(taskId, prerequisiteId));
+  }
+
+  private async removeOnce(taskId: TaskId, prerequisiteId: TaskId): Promise<Result<void>> {
     const listed = await this.dependencies.list();
     if (!listed.ok) return listed;
     return this.dependencies.replace(listed.value.filter(edge =>

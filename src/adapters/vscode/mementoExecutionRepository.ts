@@ -8,7 +8,7 @@ import {
 } from "../../modules/orchestration/public";
 import { TaskId } from "../../modules/tasks/public";
 import { WorkspaceRef } from "../../modules/workspaces/public";
-import { AsyncWriteQueue } from "./asyncWriteQueue";
+import { AsyncOperationQueue } from "../../shared/core/asyncOperationQueue";
 
 interface StoredExecution {
   readonly id: string;
@@ -24,7 +24,7 @@ interface StoredExecution {
 const STORAGE_KEY = "amazingMultiCodex.executions.v1";
 
 export class MementoExecutionRepository implements ExecutionRepository {
-  private readonly writes = new AsyncWriteQueue();
+  private readonly writes = new AsyncOperationQueue();
   constructor(private readonly state: KeyValueState) {}
 
   async findById(id: TaskExecutionId): Promise<Result<TaskExecutionRecord | undefined>> {

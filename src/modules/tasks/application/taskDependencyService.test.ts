@@ -30,3 +30,21 @@ test("persists acyclic dependencies and checks completed prerequisites", async (
   assert.equal(after.ok && after.value, true);
 });
 
+test("serializes concurrent dependency mutations without losing edges", async () => {
+  const tasks = new InMemoryTaskRepository();
+  for (const id of ["a", "b", "c"]) {
+    const task = Task.create({ id: id as TaskId, title: id, now: new Date() });
+    assert.equal(task.ok, true);
+    if (!task.ok) return;
+    await tasks.save(task.value, -1);
+  }
+  const repository = new InMemoryTaskDependencyRepository();
+  const service = new TaskDependencyService(repository, tasks);
+  const results = await Promise.all([
+    service.add("c" as TaskId, "a" as TaskId),
+    service.add("c" as TaskId, "b" as TaskId)
+  ]);
+  assert.equal(results.every(result => result.ok), true);
+  const listed = await service.listFor("c" as TaskId);
+  assert.equal(listed.ok && listed.value.length, 2);
+});
