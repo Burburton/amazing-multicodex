@@ -536,7 +536,9 @@ export function activate(context: vscode.ExtensionContext): void {
         : `Validation ${result.value.status}: ${task.title}`);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.showChanges", async (task?: TaskProps) => {
-      task = await selectTask(task, candidate => ["validating", "readyForReview", "completed", "failed"].includes(candidate.status), "Inspect task changes");
+      task = await selectTask(task, candidate => [
+        "validating", "readyForReview", "completed", "failed", "blocked", "cancelled"
+      ].includes(candidate.status), "Inspect task changes");
       if (!task) return;
       const execution = await executions.findLatestByTask(task.id);
       if (!execution.ok || !execution.value) {

@@ -98,7 +98,7 @@ function render(detail: TaskDetailProjection): string {
   const activity = detail.activity.length
     ? detail.activity.map(item => `<article><header><span class="badge">${escapeHtml(item.kind)}</span><strong>${escapeHtml(item.summary)}</strong><time>${escapeHtml(item.occurredAt.toLocaleString())}</time></header>${item.detail ? `<pre>${escapeHtml(item.detail)}</pre>` : ""}</article>`).join("")
     : '<p class="muted">No activity recorded.</p>';
-  const actions = actionsFor(task.status, task.statusReason)
+  const actions = actionsFor(task.status, task.statusReason, !!detail.latestExecution)
     .map(action => `<button data-action="${action.id}">${escapeHtml(action.label)}</button>`).join("");
   const statusReason = task.statusReason
     ? `<aside role="status"><strong>Current status:</strong> ${escapeHtml(task.statusReason)}</aside>`
@@ -115,13 +115,23 @@ ${task.description ? `<p>${escapeHtml(task.description)}</p>` : ""}${statusReaso
 </body></html>`;
 }
 
-function actionsFor(status: TaskDetailProjection["task"]["status"], reason?: string): readonly { id: TaskDetailAction; label: string }[] {
+function actionsFor(
+  status: TaskDetailProjection["task"]["status"],
+  reason: string | undefined,
+  hasExecution: boolean
+): readonly { id: TaskDetailAction; label: string }[] {
+  const inspect = hasExecution ? [{ id: "changes" as const, label: "View changes" }] : [];
   switch (status) {
     case "draft": return [{ id: "edit", label: "Edit draft" }, { id: "queue", label: "Queue task" }];
-    case "failed": case "cancelled": return [{ id: "queue", label: "Queue task" }];
+    case "failed": return [...inspect, { id: "queue", label: "Queue task" }];
+    case "cancelled": return [
+      ...inspect,
+      { id: "queue", label: "Queue task" },
+      ...(hasExecution ? [{ id: "release" as const, label: "Release worktree" }] : [])
+    ];
     case "blocked": return reason?.startsWith("integration.")
-      ? [{ id: "integrate", label: "Retry integration" }]
-      : [{ id: "queue", label: "Retry task" }];
+      ? [...inspect, { id: "integrate", label: "Retry integration" }]
+      : [...inspect, { id: "queue", label: "Retry task" }];
     case "queued": return [{ id: "start", label: "Start now" }];
     case "running": return [{ id: "resume", label: "Resume" }, { id: "cancel", label: "Cancel" }];
     case "awaitingApproval": return [{ id: "cancel", label: "Cancel" }];

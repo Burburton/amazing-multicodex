@@ -319,7 +319,7 @@
         },
         {
           "command": "amazingMultiCodex.showChanges",
-          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.validating || viewItem == multicodexTask.readyForReview || viewItem == multicodexTask.completed || viewItem == multicodexTask.failed)",
+          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.validating || viewItem == multicodexTask.readyForReview || viewItem == multicodexTask.completed || viewItem == multicodexTask.failed || viewItem == multicodexTask.cancelled || viewItem == multicodexTask.blocked || viewItem == multicodexTask.blocked.integration)",
           "group": "inline"
         },
         {
