@@ -59,3 +59,14 @@ test("rejects pending requests when connection closes", async () => {
   await assert.rejects(response, error => (error as { code: string }).code === "codex.connection-lost");
 });
 
+test("drops a delayed server response after the connection closes", async () => {
+  const transport = new RecordingTransport();
+  const peer = new JsonRpcPeer(transport);
+  let finish!: (value: unknown) => void;
+  peer.handleServerRequest("approval/request", () => new Promise(resolve => { finish = resolve; }));
+  peer.receive({ id: 10, method: "approval/request", params: {} });
+  peer.close();
+  finish({ decision: "accept" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(transport.messages, []);
+});

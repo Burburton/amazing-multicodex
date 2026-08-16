@@ -152,17 +152,27 @@ export class JsonRpcPeer {
   private async receiveServerRequest(request: JsonRpcRequest): Promise<void> {
     const handler = this.serverRequestHandlers.get(request.method);
     if (!handler) {
-      this.transport.send({
+      this.sendServerResponse({
         id: request.id,
         error: { code: -32601, message: `Unsupported server request: ${request.method}` }
       });
       return;
     }
     try {
-      this.transport.send({ id: request.id, result: await handler(request.params) });
+      const result = await handler(request.params);
+      this.sendServerResponse({ id: request.id, result });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Server request handler failed.";
-      this.transport.send({ id: request.id, error: { code: -32603, message } });
+      this.sendServerResponse({ id: request.id, error: { code: -32603, message } });
+    }
+  }
+
+  private sendServerResponse(message: JsonRpcSuccess | JsonRpcFailure): void {
+    if (this.closed) return;
+    try {
+      this.transport.send(message);
+    } catch {
+      // The process can close between the state check and the transport write.
     }
   }
 }
@@ -180,4 +190,3 @@ function peerError(
 ): AppError {
   return { code, category: "unavailable", message, retryable, context, cause };
 }
-
