@@ -34,7 +34,7 @@ const workspace: WorkspaceRef = {
 
 test("prepares a worktree with structured Git arguments", async () => {
   const commands = new ScriptedCommands();
-  commands.responses.push(success("/repo\n"), success());
+  commands.responses.push(success("/repo\n"), success("base-commit\n"), success());
   const adapter = new GitWorkspaceAdapter(commands);
   const result = await adapter.prepare({
     id: workspace.id,
@@ -45,9 +45,11 @@ test("prepares a worktree with structured Git arguments", async () => {
     baseRef: "main"
   });
   assert.equal(result.ok, true);
-  assert.deepEqual(commands.calls[1].args, [
-    "worktree", "add", "-b", "multicodex/task-1", "/worktrees/workspace-1", "main"
+  assert.deepEqual(commands.calls[2].args, [
+    "worktree", "add", "-b", "multicodex/task-1", "/worktrees/workspace-1", "base-commit"
   ]);
+  if (!result.ok) return;
+  assert.equal(result.value.baseRef, "base-commit");
 });
 
 test("rejects a worktree path that resolves to the configured root", async () => {
