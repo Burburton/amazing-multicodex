@@ -50,7 +50,12 @@ export function activate(context: vscode.ExtensionContext): void {
   const dependencies = new TaskDependencyService(
     new MementoTaskDependencyRepository(context.workspaceState), repository
   );
-  const tree = new TaskTreeProvider(repository);
+  const tree = new TaskTreeProvider(repository, {
+    error: (message, error) => {
+      console.error("MultiCodex task tree error", error);
+      void vscode.window.showErrorMessage(`MultiCodex could not load tasks: ${message}`);
+    }
+  });
   const ids = new CryptoIdGenerator();
   const codex = new CodexProcessSupervisor(new NodeProcessFactory(), {
     malformedProtocolLine: line => console.warn("MultiCodex ignored malformed Codex output", line),

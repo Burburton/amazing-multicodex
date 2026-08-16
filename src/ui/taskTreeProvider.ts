@@ -1,11 +1,18 @@
 import * as vscode from "vscode";
 import { TaskProps, TaskRepository, TaskStatus } from "../modules/tasks/public";
 
+export interface TaskTreeDiagnostics {
+  readonly error: (message: string, cause?: unknown) => void;
+}
+
 export class TaskTreeProvider implements vscode.TreeDataProvider<TaskProps> {
   private readonly changeEmitter = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changeEmitter.event;
 
-  constructor(private readonly repository: TaskRepository) {}
+  constructor(
+    private readonly repository: TaskRepository,
+    private readonly diagnostics: TaskTreeDiagnostics = { error: () => undefined }
+  ) {}
 
   getTreeItem(task: TaskProps): vscode.TreeItem {
     const item = new vscode.TreeItem(task.title, vscode.TreeItemCollapsibleState.None);
@@ -20,7 +27,10 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskProps> {
 
   async getChildren(): Promise<TaskProps[]> {
     const tasks = await this.repository.list();
-    if (!tasks.ok) return [];
+    if (!tasks.ok) {
+      this.diagnostics.error(tasks.error.message, tasks.error);
+      return [];
+    }
     return tasks.value.map(task => task.snapshot());
   }
 
