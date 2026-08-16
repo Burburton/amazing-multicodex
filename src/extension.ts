@@ -5,7 +5,7 @@ import { NodeCommandRunner } from "./adapters/process/nodeCommandRunner";
 import { NodeProcessFactory } from "./adapters/process/nodeProcessFactory";
 import { MementoExecutionRepository } from "./adapters/vscode/mementoExecutionRepository";
 import { MementoTaskRepository } from "./adapters/vscode/mementoTaskRepository";
-import { AgentEventCoordinator, StartTaskWorkflow } from "./modules/orchestration/public";
+import { AgentEventCoordinator, ResumeTaskWorkflow, StartTaskWorkflow } from "./modules/orchestration/public";
 import { CreateTaskHandler, TaskLifecycleService, TaskProps } from "./modules/tasks/public";
 import { SystemClock } from "./shared/core/clock";
 import { CryptoIdGenerator } from "./shared/core/idGenerator";
@@ -116,6 +116,36 @@ export function activate(context: vscode.ExtensionContext): void {
           void vscode.window.showErrorMessage(`Could not start MultiCodex task: ${message}`);
         }
       });
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.resumeTask", async (task?: TaskProps) => {
+      if (!task) {
+        void vscode.window.showErrorMessage("Select a running MultiCodex task to resume.");
+        return;
+      }
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder || workspaceFolder.uri.scheme !== "file") {
+        void vscode.window.showErrorMessage("Open the task's local Git workspace before resuming.");
+        return;
+      }
+      try {
+        const agent = await codex.start({ cwd: workspaceFolder.uri.fsPath });
+        coordinator?.stop();
+        coordinator = new AgentEventCoordinator(agent, executions, lifecycle, clock, {
+          error: (message, error) => console.error(message, error),
+          taskChanged: () => tree.refresh()
+        });
+        coordinator.start();
+        const resumed = await new ResumeTaskWorkflow(lifecycle, agent, executions, clock)
+          .execute({ taskId: task.id });
+        if (!resumed.ok) {
+          void vscode.window.showErrorMessage(resumed.error.message);
+          return;
+        }
+        void vscode.window.showInformationMessage(`Resumed MultiCodex task: ${task.title}`);
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : "Unknown resume error.";
+        void vscode.window.showErrorMessage(`Could not resume MultiCodex task: ${message}`);
+      }
     })
   );
 }

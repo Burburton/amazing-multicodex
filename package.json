@@ -19,7 +19,8 @@
   "activationEvents": [
     "onView:amazingMultiCodex.tasks",
     "onCommand:amazingMultiCodex.createTask",
-    "onCommand:amazingMultiCodex.startTask"
+    "onCommand:amazingMultiCodex.startTask",
+    "onCommand:amazingMultiCodex.resumeTask"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -45,6 +46,11 @@
         "command": "amazingMultiCodex.startTask",
         "title": "MultiCodex: Start Task",
         "icon": "$(play)"
+      },
+      {
+        "command": "amazingMultiCodex.resumeTask",
+        "title": "MultiCodex: Resume Task",
+        "icon": "$(debug-continue)"
       }
     ],
     "menus": {
@@ -64,6 +70,11 @@
         {
           "command": "amazingMultiCodex.startTask",
           "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.queued",
+          "group": "inline"
+        },
+        {
+          "command": "amazingMultiCodex.resumeTask",
+          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.running",
           "group": "inline"
         }
       ]
