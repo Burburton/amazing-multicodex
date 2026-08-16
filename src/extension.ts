@@ -55,6 +55,7 @@ import { sortTasksForDisplay, taskPriorityLabel, taskStatusLabel } from "./ui/ta
 
 export function activate(context: vscode.ExtensionContext): void {
   const connectedTasks = new Set<TaskProps["id"]>();
+  const validatingTasks = new Set<TaskProps["id"]>();
   const repository = new MementoTaskRepository(context.workspaceState);
   const clock = new SystemClock();
   const createTask = new CreateTaskHandler(repository, clock, new CryptoIdGenerator());
@@ -534,6 +535,12 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("amazingMultiCodex.validateTask", async (task?: TaskProps) => {
       task = await selectTask(task, candidate => candidate.status === "validating", "Validate a completed Codex task");
       if (!task) return;
+      if (validatingTasks.has(task.id)) {
+        void vscode.window.showInformationMessage(`Validation is already running for: ${task.title}`);
+        return;
+      }
+      validatingTasks.add(task.id);
+      try {
       const settings = readSettings();
       if (!settings.ok) {
         void vscode.window.showErrorMessage(settings.error.message);
@@ -587,6 +594,9 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showInformationMessage(result.value.status === "cancelled"
         ? `Validation cancelled; '${task.title}' remains ready to validate.`
         : `Validation ${result.value.status}: ${task.title}`);
+      } finally {
+        validatingTasks.delete(task.id);
+      }
     }),
     vscode.commands.registerCommand("amazingMultiCodex.showChanges", async (task?: TaskProps) => {
       task = await selectTask(task, candidate => [
