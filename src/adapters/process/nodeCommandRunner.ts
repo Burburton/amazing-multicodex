@@ -8,15 +8,18 @@ export class NodeCommandRunner implements CommandRunnerPort {
         cwd: spec.cwd,
         env: { ...process.env, ...spec.env },
         shell: false,
+        detached: process.platform !== "win32",
         windowsHide: true
       });
       const capture = new BoundedOutputCapture(spec.maxOutputBytes ?? 2 * 1024 * 1024);
       let forceKillTimer: NodeJS.Timeout | undefined;
+      let closed = false;
 
       child.stdout.on("data", chunk => { capture.append("stdout", Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)); });
       child.stderr.on("data", chunk => { capture.append("stderr", Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)); });
       child.once("error", reject);
       child.once("close", (exitCode, exitSignal) => {
+        closed = true;
         if (forceKillTimer) clearTimeout(forceKillTimer);
         resolve({
           exitCode,
@@ -26,16 +29,28 @@ export class NodeCommandRunner implements CommandRunnerPort {
       });
 
       const abort = () => {
-        if (child.exitCode !== null || child.signalCode !== null) return;
-        child.kill();
+        if (closed) return;
+        terminate("SIGTERM");
         forceKillTimer = setTimeout(() => {
-          if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+          if (!closed) terminate("SIGKILL");
         }, 1_000);
         forceKillTimer.unref();
       };
       if (signal?.aborted) abort();
       else signal?.addEventListener("abort", abort, { once: true });
       child.once("close", () => signal?.removeEventListener("abort", abort));
+
+      function terminate(signal: NodeJS.Signals): void {
+        if (process.platform !== "win32" && child.pid !== undefined) {
+          try {
+            process.kill(-child.pid, signal);
+            return;
+          } catch {
+            // Fall back to the direct child when a process group is unavailable.
+          }
+        }
+        child.kill(signal);
+      }
     });
   }
 }

@@ -23,6 +23,33 @@ test("command runner terminates a command for an already-aborted signal", async 
   assert.notEqual(result.signal, null);
 });
 
+test("aborting a command terminates descendants that retain its output pipes", {
+  skip: process.platform === "win32"
+}, async () => {
+  const controller = new AbortController();
+  const result = new NodeCommandRunner().run({
+    executable: process.execPath,
+    args: [
+      "-e",
+      "require('node:child_process').spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'inherit'});setInterval(()=>{},1000)"
+    ]
+  }, controller.signal);
+  const abortTimer = setTimeout(() => controller.abort(), 100);
+  let failureTimer!: NodeJS.Timeout;
+  try {
+    const completed = await Promise.race([
+      result,
+      new Promise<never>((_, reject) => {
+        failureTimer = setTimeout(() => reject(new Error("process tree did not terminate")), 3_000);
+      })
+    ]);
+    assert.notEqual(completed.signal, null);
+  } finally {
+    clearTimeout(abortTimer);
+    clearTimeout(failureTimer);
+  }
+});
+
 test("command runner bounds stdout capture", async () => {
   const result = await new NodeCommandRunner().run({
     executable: "git",
