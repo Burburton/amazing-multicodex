@@ -59,7 +59,8 @@
   "scripts": {
     "compile": "node scripts/clean-out.js && tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "check": "tsc --noEmit -p ./",
+    "check": "tsc --noEmit -p ./ && npm run check:architecture",
+    "check:architecture": "node scripts/check-architecture.js",
     "test": "npm run compile && node --test out/**/*.test.js",
     "package": "npm run compile && vsce package --no-dependencies"
   },
