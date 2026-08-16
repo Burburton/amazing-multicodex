@@ -1,6 +1,6 @@
 import { TaskId } from "../../tasks/public";
 
-export function workspaceBranch(taskId: TaskId, title: string): string {
+export function workspaceBranch(taskId: TaskId, title: string, lineageId: string): string {
   const slug = title
     .normalize("NFKD")
     .toLowerCase()
@@ -8,6 +8,6 @@ export function workspaceBranch(taskId: TaskId, title: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
   const idSuffix = taskId.replace(/[^a-zA-Z0-9]/g, "").slice(-8).toLowerCase();
-  return `multicodex/${slug || "task"}-${idSuffix || "unknown"}`;
+  const lineageSuffix = lineageId.replace(/[^a-zA-Z0-9]/g, "").slice(-8).toLowerCase();
+  return `multicodex/${slug || "task"}-${idSuffix || "unknown"}-${lineageSuffix || "unknown"}`;
 }
-

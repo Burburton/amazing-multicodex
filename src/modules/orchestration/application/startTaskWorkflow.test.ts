@@ -95,7 +95,7 @@ test("coordinates queued task, workspace, agent, and execution record", async ()
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.value.status, "running");
-  assert.equal(workspaces.prepared?.branch, "multicodex/build-feature-12345678");
+  assert.equal(workspaces.prepared?.branch, "multicodex/build-feature-12345678-id2");
   assert.equal(agents.started?.cwd, "/worktrees/id-2");
   assert.match(agents.started?.prompt ?? "", /Acceptance criteria/);
   const task = await tasks.findById("task-12345678" as TaskId);

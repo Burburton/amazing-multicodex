@@ -61,7 +61,7 @@ export class StartTaskWorkflow {
       taskId: command.taskId,
       repositoryRoot: command.repositoryRoot,
       worktreeRoot: command.worktreeRoot,
-      branch: workspaceBranch(command.taskId, task.value.title),
+      branch: workspaceBranch(command.taskId, task.value.title, workspaceId),
       baseRef: command.baseRef
     });
     if (!prepared.ok) {
