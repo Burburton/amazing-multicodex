@@ -12,6 +12,35 @@ test("creates a normalized draft task", () => {
   assert.equal(result.value.snapshot().status, "draft");
 });
 
+test("rejects task context that exceeds prompt and persistence bounds", () => {
+  const description = Task.create({
+    id: "description" as TaskId,
+    title: "Task",
+    description: "x".repeat(20_001),
+    now
+  });
+  assert.equal(description.ok, false);
+  if (!description.ok) assert.equal(description.error.code, "task.description-too-long");
+
+  const count = Task.create({
+    id: "count" as TaskId,
+    title: "Task",
+    acceptanceCriteria: Array.from({ length: 51 }, (_, index) => `criterion-${index}`),
+    now
+  });
+  assert.equal(count.ok, false);
+  if (!count.ok) assert.equal(count.error.code, "task.criteria-too-many");
+
+  const criterion = Task.create({
+    id: "criterion" as TaskId,
+    title: "Task",
+    acceptanceCriteria: ["x".repeat(2_001)],
+    now
+  });
+  assert.equal(criterion.ok, false);
+  if (!criterion.ok) assert.equal(criterion.error.code, "task.criterion-too-long");
+});
+
 test("rejects invalid task transitions", () => {
   const result = Task.create({ id: "task-1" as TaskId, title: "Build it", now });
   assert.equal(result.ok, true);
