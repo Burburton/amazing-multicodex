@@ -1,5 +1,5 @@
 import { Readable, Writable } from "node:stream";
-import { createInterface, Interface } from "node:readline";
+import { StringDecoder } from "node:string_decoder";
 import { JsonRpcMessage, JsonRpcTransport } from "./jsonRpc";
 
 export interface JsonLineTransportHandlers {
@@ -8,16 +8,27 @@ export interface JsonLineTransportHandlers {
 }
 
 export class JsonLineTransport implements JsonRpcTransport {
-  private readonly lines: Interface;
+  private readonly decoder = new StringDecoder("utf8");
+  private buffer = "";
+  private discardedLine = false;
   private disposed = false;
+  private readonly onData = (chunk: Buffer | string): void => {
+    this.receiveChunk(typeof chunk === "string" ? chunk : this.decoder.write(chunk));
+  };
+  private readonly onEnd = (): void => {
+    const remainder = this.decoder.end();
+    if (remainder) this.receiveChunk(remainder);
+    this.finishLine();
+  };
 
   constructor(
-    input: Readable,
+    private readonly input: Readable,
     private readonly output: Writable,
-    private readonly handlers: JsonLineTransportHandlers
+    private readonly handlers: JsonLineTransportHandlers,
+    private readonly maxLineCharacters = 4 * 1024 * 1024
   ) {
-    this.lines = createInterface({ input, crlfDelay: Infinity });
-    this.lines.on("line", line => this.receiveLine(line));
+    this.input.on("data", this.onData);
+    this.input.once("end", this.onEnd);
   }
 
   send(message: JsonRpcMessage): void {
@@ -28,7 +39,45 @@ export class JsonLineTransport implements JsonRpcTransport {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.lines.close();
+    this.input.removeListener("data", this.onData);
+    this.input.removeListener("end", this.onEnd);
+  }
+
+  private receiveChunk(chunk: string): void {
+    let offset = 0;
+    while (offset < chunk.length) {
+      const newline = chunk.indexOf("\n", offset);
+      const end = newline === -1 ? chunk.length : newline;
+      this.appendFragment(chunk.slice(offset, end));
+      if (newline === -1) return;
+      this.finishLine();
+      offset = newline + 1;
+    }
+  }
+
+  private appendFragment(fragment: string): void {
+    if (this.discardedLine) return;
+    const remaining = this.maxLineCharacters - this.buffer.length;
+    if (fragment.length <= remaining) {
+      this.buffer += fragment;
+      return;
+    }
+    this.buffer += fragment.slice(0, Math.max(0, remaining));
+    this.discardedLine = true;
+  }
+
+  private finishLine(): void {
+    if (!this.buffer && !this.discardedLine) return;
+    const line = this.buffer.endsWith("\r") ? this.buffer.slice(0, -1) : this.buffer;
+    this.buffer = "";
+    if (this.discardedLine) {
+      this.discardedLine = false;
+      this.handlers.onMalformedLine(line, new Error(
+        `JSONL message exceeded ${this.maxLineCharacters.toLocaleString()} characters.`
+      ));
+      return;
+    }
+    this.receiveLine(line);
   }
 
   private receiveLine(line: string): void {

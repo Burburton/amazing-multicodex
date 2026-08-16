@@ -32,3 +32,23 @@ test("reads and writes newline-delimited protocol messages", async () => {
   assert.equal(written, '{"id":4,"method":"thread/start","params":{}}\n');
   transport.dispose();
 });
+
+test("drops an oversized line and continues with the next protocol message", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const received: JsonRpcMessage[] = [];
+  const malformed: string[] = [];
+  const transport = new JsonLineTransport(input, output, {
+    onMessage: message => received.push(message),
+    onMalformedLine: line => malformed.push(line)
+  }, 20);
+
+  input.write("x".repeat(50));
+  input.write('\n{"method":"ok"}\n');
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(malformed.length, 1);
+  assert.equal(malformed[0]?.length, 20);
+  assert.deepEqual(received, [{ method: "ok" }]);
+  transport.dispose();
+});
