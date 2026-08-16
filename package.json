@@ -59,11 +59,13 @@
       "properties": {
         "amazingMultiCodex.codexExecutable": {
           "type": "string",
+          "maxLength": 4096,
           "default": "codex",
           "description": "Codex CLI executable used to start App Server."
         },
         "amazingMultiCodex.defaultModel": {
           "type": "string",
+          "maxLength": 1000,
           "default": "",
           "description": "Optional model override for newly started tasks. Empty uses the Codex default."
         },
@@ -76,6 +78,7 @@
         },
         "amazingMultiCodex.baseRef": {
           "type": "string",
+          "maxLength": 1024,
           "default": "HEAD",
           "description": "Git ref used as the base for new task worktrees."
         },

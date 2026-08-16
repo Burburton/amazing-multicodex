@@ -65,3 +65,15 @@ test("bounds and normalizes configured validation commands", () => {
   assert.equal(oversized.ok, false);
   if (!oversized.ok) assert.equal(oversized.error.code, "settings.validation-commands");
 });
+
+test("bounds executable, model, and base ref strings", () => {
+  const cases = [
+    [parseSettings({ codexExecutable: "x".repeat(4_097) }), "settings.codex-executable"],
+    [parseSettings({ defaultModel: "x".repeat(1_001) }), "settings.default-model"],
+    [parseSettings({ baseRef: "x".repeat(1_025) }), "settings.base-ref"]
+  ] as const;
+  for (const [result, code] of cases) {
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error.code, code);
+  }
+});

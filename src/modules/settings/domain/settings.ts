@@ -54,9 +54,16 @@ export function parseSettings(input: SettingsInput): Result<MultiCodexSettings> 
     validationTimeoutMs: input.validationTimeoutMs ?? defaultSettings.validationTimeoutMs,
     validationCommands: input.validationCommands ?? defaultSettings.validationCommands
   };
-  if (!value.codexExecutable.trim()) return err(settingError("settings.codex-executable", "Codex executable cannot be empty."));
+  if (!value.codexExecutable.trim() || value.codexExecutable.length > 4_096) {
+    return err(settingError("settings.codex-executable", "Codex executable must contain between 1 and 4,096 characters."));
+  }
+  if (value.defaultModel && value.defaultModel.length > 1_000) {
+    return err(settingError("settings.default-model", "Default model cannot exceed 1,000 characters."));
+  }
   const baseRef = value.baseRef.trim();
-  if (!baseRef) return err(settingError("settings.base-ref", "Git base ref cannot be empty."));
+  if (!baseRef || baseRef.length > 1_024) {
+    return err(settingError("settings.base-ref", "Git base ref must contain between 1 and 1,024 characters."));
+  }
   if (baseRef.startsWith("-") || /[\0\r\n]/.test(baseRef)) {
     return err(settingError(
       "settings.base-ref",
