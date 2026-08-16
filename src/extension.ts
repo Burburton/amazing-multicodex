@@ -670,15 +670,17 @@ export function activate(context: vscode.ExtensionContext): void {
     coordinator?.stop();
     coordinator = new AgentEventCoordinator(agent, executions, lifecycle, clock, {
       error: (message, error) => console.error(message, error),
-      taskChanged: () => {
+      taskChanged: taskId => {
         tree.refresh();
+        void taskDetails.refresh(taskId);
         void dispatchQueue(false);
       }
     });
     coordinator.start();
     activityBridge?.stop();
     activityBridge = new AgentActivityBridge(agent, executions, activity, maxActivityCharacters, {
-      error: (message, error) => console.error(message, error)
+      error: (message, error) => console.error(message, error),
+      activityRecorded: taskId => { void taskDetails.refresh(taskId); }
     });
     activityBridge.start();
     approvalBridge?.stop();

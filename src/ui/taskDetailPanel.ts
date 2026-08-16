@@ -24,7 +24,7 @@ export class TaskDetailPanelManager implements vscode.Disposable {
     const existing = this.panels.get(taskId);
     if (existing) {
       existing.reveal(vscode.ViewColumn.Active);
-      await this.refresh(taskId, existing);
+      await this.refreshPanel(taskId, existing);
       return;
     }
     const detail = await this.load(taskId);
@@ -39,7 +39,7 @@ export class TaskDetailPanelManager implements vscode.Disposable {
     panel.webview.html = render(detail);
     panel.onDidDispose(() => this.panels.delete(taskId));
     panel.onDidChangeViewState(event => {
-      if (event.webviewPanel.visible) void this.refresh(taskId, panel);
+      if (event.webviewPanel.visible) void this.refreshPanel(taskId, panel);
     });
     panel.webview.onDidReceiveMessage(async message => {
       if (!isActionMessage(message) || this.actionsInFlight.has(taskId)) return;
@@ -52,9 +52,14 @@ export class TaskDetailPanelManager implements vscode.Disposable {
         this.onError("MultiCodex task action failed.", cause);
       } finally {
         this.actionsInFlight.delete(taskId);
-        await this.refresh(taskId, panel);
+        await this.refreshPanel(taskId, panel);
       }
     });
+  }
+
+  async refresh(taskId: TaskId): Promise<void> {
+    const panel = this.panels.get(taskId);
+    if (panel) await this.refreshPanel(taskId, panel);
   }
 
   dispose(): void {
@@ -63,7 +68,7 @@ export class TaskDetailPanelManager implements vscode.Disposable {
     this.actionsInFlight.clear();
   }
 
-  private async refresh(taskId: TaskId, panel: vscode.WebviewPanel): Promise<void> {
+  private async refreshPanel(taskId: TaskId, panel: vscode.WebviewPanel): Promise<void> {
     const detail = await this.load(taskId);
     if (!detail || !this.panels.has(taskId)) return;
     panel.title = `MultiCodex: ${detail.task.title}`;

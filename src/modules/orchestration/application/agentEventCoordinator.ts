@@ -5,7 +5,7 @@ import { ExecutionRepository, TaskExecutionRecord } from "../ports/executionRepo
 
 export interface CoordinatorDiagnostics {
   readonly error: (message: string, cause?: unknown) => void;
-  readonly taskChanged?: () => void;
+  readonly taskChanged?: (taskId: TaskExecutionRecord["taskId"]) => void;
 }
 
 const silentDiagnostics: CoordinatorDiagnostics = { error: () => undefined };
@@ -59,7 +59,7 @@ export class AgentEventCoordinator {
     if (!transitioned.ok) {
       this.diagnostics.error("Could not advance task after agent completion.", transitioned.error);
     } else {
-      this.diagnostics.taskChanged?.();
+      this.diagnostics.taskChanged?.(found.value.taskId);
     }
   }
 }

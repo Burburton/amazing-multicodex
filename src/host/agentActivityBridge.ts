@@ -1,9 +1,10 @@
 import { AgentRuntimeEvent, AgentRuntimePort } from "../modules/agents/public";
 import { ActivityService } from "../modules/activity/public";
-import { ExecutionRepository } from "../modules/orchestration/public";
+import { ExecutionRepository, TaskExecutionRecord } from "../modules/orchestration/public";
 
 export interface ActivityBridgeDiagnostics {
   readonly error: (message: string, cause?: unknown) => void;
+  readonly activityRecorded?: (taskId: TaskExecutionRecord["taskId"]) => void;
 }
 
 export class AgentActivityBridge {
@@ -63,5 +64,6 @@ export class AgentActivityBridge {
       summary: `Codex turn ${event.status}`
     });
     if (!terminal.ok) this.diagnostics.error("Could not persist Codex terminal activity.", terminal.error);
+    else this.diagnostics.activityRecorded?.(execution.value.taskId);
   }
 }
