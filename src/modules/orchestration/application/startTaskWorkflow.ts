@@ -81,9 +81,10 @@ export class StartTaskWorkflow {
     };
     const saved = await this.executions.save(execution, -1);
     if (!saved.ok) {
-      await this.workspaces.release({ workspace: prepared.value, force: false });
-      await this.tasks.transition(command.taskId, "blocked", saved.error.code);
-      return saved;
+      const released = await this.workspaces.release({ workspace: prepared.value, force: false });
+      const failure = released.ok ? saved.error : cleanupFailed(prepared.value.path, saved.error, released.error);
+      await this.tasks.transition(command.taskId, "blocked", failure.code);
+      return err(failure);
     }
 
     try {
@@ -160,5 +161,16 @@ function prerequisitesIncomplete(taskId: TaskId): AppError {
     message: "Task prerequisites must be completed before execution can start.",
     retryable: true,
     context: { taskId }
+  };
+}
+
+function cleanupFailed(path: string, persistenceFailure: AppError, releaseFailure: AppError): AppError {
+  return {
+    code: "workspace.cleanup-failed",
+    category: "unavailable",
+    message: `Execution persistence failed and the prepared worktree was retained at '${path}'.`,
+    retryable: false,
+    context: { path },
+    cause: { persistenceFailure, releaseFailure }
   };
 }

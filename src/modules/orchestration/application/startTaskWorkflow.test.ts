@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Clock } from "../../../shared/core/clock";
 import { IdGenerator } from "../../../shared/core/idGenerator";
-import { Result, err, ok } from "../../../shared/core/result";
+import { AppError, Result, err, ok } from "../../../shared/core/result";
 import {
   AgentApprovalHandler,
   AgentEventListener,
@@ -53,13 +53,17 @@ class FakeAgent implements AgentRuntimePort {
 class FakeWorkspaces implements WorkspacePort {
   prepared?: PrepareWorkspaceInput;
   released?: ReleaseWorkspaceInput;
+  releaseError?: AppError;
   async prepare(input: PrepareWorkspaceInput): Promise<Result<WorkspaceRef>> {
     this.prepared = input;
     return ok({ ...input, path: `${input.worktreeRoot}/${input.id}` });
   }
   inspect(_workspace: WorkspaceRef): Promise<Result<WorkspaceSnapshot>> { throw new Error("unused"); }
   diff(_workspace: WorkspaceRef): Promise<Result<ChangeSet>> { throw new Error("unused"); }
-  async release(input: ReleaseWorkspaceInput): Promise<Result<void>> { this.released = input; return ok(undefined); }
+  async release(input: ReleaseWorkspaceInput): Promise<Result<void>> {
+    this.released = input;
+    return this.releaseError ? err(this.releaseError) : ok(undefined);
+  }
 }
 
 test("coordinates queued task, workspace, agent, and execution record", async () => {
@@ -168,4 +172,40 @@ test("releases a newly prepared worktree when execution persistence fails", asyn
   assert.equal(result.ok, false);
   assert.equal(workspaces.released?.force, false);
   assert.equal(workspaces.released?.workspace.id, "id-2");
+});
+
+test("reports the retained worktree path when persistence cleanup also fails", async () => {
+  const clock = new FixedClock();
+  const tasks = new InMemoryTaskRepository();
+  const created = Task.create({ id: "task-failed" as TaskId, title: "Failure", now: clock.now() });
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  created.value.transition("queued", clock.now());
+  await tasks.save(created.value, -1);
+  const workspaces = new FakeWorkspaces();
+  workspaces.releaseError = {
+    code: "git.command-failed", category: "unavailable", message: "cleanup failed", retryable: false
+  };
+  const executions = {
+    findActiveByTask: async () => ok(undefined), listActive: async () => ok([]),
+    save: async () => err({
+      code: "execution.persistence-failed", category: "unavailable" as const,
+      message: "failed", retryable: true
+    })
+  };
+  const result = await new StartTaskWorkflow(
+    new TaskLifecycleService(tasks, clock), workspaces, new FakeAgent(), executions as never, clock,
+    new SequenceIds(), new ExecutionCapacityGate(),
+    new TaskDependencyService(new InMemoryTaskDependencyRepository(), tasks)
+  ).execute({
+    taskId: "task-failed" as TaskId, repositoryRoot: "/repo", worktreeRoot: "/worktrees",
+    baseRef: "main", concurrencyLimit: 1
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.code, "workspace.cleanup-failed");
+    assert.equal(result.error.context?.path, "/worktrees/id-2");
+  }
+  const task = await tasks.findById("task-failed" as TaskId);
+  assert.equal(task.ok && task.value?.snapshot().statusReason, "workspace.cleanup-failed");
 });
