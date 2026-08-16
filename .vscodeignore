@@ -8,6 +8,7 @@ scripts/
 tsconfig.json
 **/*.map
 out/**/*.test.js
+out/**/adapters/inMemory*.js
 *.vsix
 README.md
 package-lock.json
