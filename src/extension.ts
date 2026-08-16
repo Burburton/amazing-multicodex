@@ -118,14 +118,8 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showErrorMessage(created.error.message);
         return;
       }
-      const queued = await lifecycle.transition(created.value.id, "queued");
-      if (!queued.ok) {
-        void vscode.window.showErrorMessage(queued.error.message);
-        return;
-      }
       tree.refresh();
-      void dispatchQueue(false);
-      void vscode.window.showInformationMessage(`Queued MultiCodex task: ${title.trim()}`);
+      void vscode.window.showInformationMessage(`Created draft MultiCodex task: ${title.trim()}`);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.refreshTasks", () => {
       tree.refresh();

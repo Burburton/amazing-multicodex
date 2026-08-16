@@ -19,6 +19,7 @@ The extension currently provides the core multi-task execution loop:
 - modal command and file-change approvals with durable decisions;
 - configurable sequential validation gates with persisted task transitions;
 - persisted acyclic prerequisites and priority-aware automatic queue dispatch;
+- draft-first task creation so dependencies can be configured before dispatch;
 - complete worktree diff review, including committed and untracked changes;
 - explicit merge or squash integration into a clean target repository;
 - immutable reviewed-commit integration and explicit clean-worktree release;
