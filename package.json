@@ -88,16 +88,32 @@
             {
               "label": "Git whitespace check",
               "executable": "git",
-              "args": ["diff", "--check"]
+              "args": [
+                "diff",
+                "--check"
+              ]
             }
           ],
           "items": {
             "type": "object",
-            "required": ["label", "executable", "args"],
+            "required": [
+              "label",
+              "executable",
+              "args"
+            ],
             "properties": {
-              "label": { "type": "string" },
-              "executable": { "type": "string" },
-              "args": { "type": "array", "items": { "type": "string" } }
+              "label": {
+                "type": "string"
+              },
+              "executable": {
+                "type": "string"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
             }
           },
           "description": "Ordered validation commands run inside a completed task worktree."
@@ -290,7 +306,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "@types/vscode": "^1.90.0",
+    "@types/vscode": "1.90.0",
     "@vscode/vsce": "^3.9.2",
     "typescript": "^5.6.0"
   }
