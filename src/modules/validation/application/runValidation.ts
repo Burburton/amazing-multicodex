@@ -82,12 +82,16 @@ export class RunValidationHandler {
         cwd,
         maxOutputBytes: check.maxOutputBytes
       }, combined);
+      const userCancelled = signal?.aborted ?? false;
+      const timedOut = !userCancelled && (timeout?.aborted ?? false);
       return ok({
         checkId: check.id,
-        status: combined?.aborted ? "cancelled" : result.exitCode === 0 ? "passed" : "failed",
+        status: userCancelled ? "cancelled" : timedOut || result.exitCode !== 0 ? "failed" : "passed",
         exitCode: result.exitCode,
         stdout: result.stdout,
-        stderr: result.stderr,
+        stderr: timedOut && !result.stderr.trim()
+          ? `Timed out after ${check.timeoutMs?.toLocaleString()} ms.`
+          : result.stderr,
         truncated: result.truncated,
         startedAt,
         completedAt: this.clock.now()

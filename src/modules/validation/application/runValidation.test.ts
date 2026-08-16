@@ -21,6 +21,19 @@ class FakeCommands implements CommandRunnerPort {
     return this.results.shift() ?? result(0);
   }
 }
+class WaitForAbortCommands implements CommandRunnerPort {
+  run(_spec: CommandSpec, signal?: AbortSignal): Promise<CommandResult> {
+    return new Promise(resolve => {
+      const keepAlive = setTimeout(() => undefined, 1_000);
+      const complete = () => {
+        clearTimeout(keepAlive);
+        resolve({ exitCode: null, signal: "SIGTERM", stdout: "", stderr: "", truncated: false });
+      };
+      if (signal?.aborted) complete();
+      else signal?.addEventListener("abort", complete, { once: true });
+    });
+  }
+}
 
 const result = (exitCode: number): CommandResult => ({
   exitCode, signal: null, stdout: "output", stderr: "", truncated: false
@@ -77,4 +90,28 @@ test("reports a pre-cancelled sequential run as cancelled without executing chec
   assert.equal(validation.value.status, "cancelled");
   assert.equal(validation.value.checks.length, 0);
   assert.equal(commands.calls.length, 0);
+});
+
+test("reports a check timeout as a failed validation rather than user cancellation", async () => {
+  const validation = await new RunValidationHandler(
+    new WaitForAbortCommands(), new SteppingClock(), new FixedIds()
+  ).execute({
+    workspace,
+    profile: {
+      id: "timeout" as ValidationProfileId,
+      mode: "sequential",
+      checks: [{
+        id: "timeout-check" as ValidationCheckId,
+        label: "Slow check",
+        executable: "slow",
+        args: [],
+        timeoutMs: 5
+      }]
+    }
+  });
+  assert.equal(validation.ok, true);
+  if (!validation.ok) return;
+  assert.equal(validation.value.status, "failed");
+  assert.equal(validation.value.checks[0]?.status, "failed");
+  assert.equal(validation.value.checks[0]?.stderr, "Timed out after 5 ms.");
 });
