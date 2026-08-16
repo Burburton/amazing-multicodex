@@ -12,6 +12,7 @@ class FakeState implements KeyValueState {
   constructor(value?: unknown) { if (value !== undefined) this.values.set("amazingMultiCodex.executions.v1", value); }
   get<T>(key: string, defaultValue: T): T { return (this.values.get(key) as T | undefined) ?? defaultValue; }
   update(key: string, value: unknown): Thenable<void> { this.values.set(key, value); return Promise.resolve(); }
+  stored(): readonly unknown[] { return this.get("amazingMultiCodex.executions.v1", []); }
 }
 
 test("persists and resolves execution by agent identity", async () => {
@@ -75,4 +76,50 @@ test("serializes concurrent writes so different executions are not lost", async 
   assert.equal(first.ok && second.ok, true);
   const active = await repository.listActive();
   assert.equal(active.ok && active.value.length, 2);
+});
+
+test("bounds terminal history while preserving active and latest task executions", async () => {
+  const stored = Array.from({ length: 1_002 }, (_, index) => ({
+    id: `old-${index}`,
+    taskId: index === 0 ? "task-with-active" : "task-with-history",
+    workspace: {
+      id: `workspace-${index}`,
+      taskId: index === 0 ? "task-with-active" : "task-with-history",
+      repositoryRoot: "/repo",
+      worktreeRoot: "/worktrees",
+      path: `/worktrees/${index}`,
+      branch: `branch-${index}`,
+      baseRef: "main"
+    },
+    status: index === 0 ? "running" : "completed",
+    createdAt: new Date(index * 1_000).toISOString(),
+    updatedAt: new Date(index * 1_000).toISOString(),
+    version: 0
+  }));
+  const state = new FakeState(stored);
+  const repository = new MementoExecutionRepository(state);
+  const saved = await repository.save({
+    id: "new-history" as TaskExecutionId,
+    taskId: "another-task" as TaskId,
+    workspace: {
+      id: "new-workspace" as WorkspaceId,
+      taskId: "another-task" as TaskId,
+      repositoryRoot: "/repo",
+      worktreeRoot: "/worktrees",
+      path: "/worktrees/new",
+      branch: "new-branch",
+      baseRef: "main"
+    },
+    status: "completed",
+    createdAt: new Date("2026-08-16T00:00:00Z"),
+    updatedAt: new Date("2026-08-16T00:00:00Z"),
+    version: 0
+  }, -1);
+  assert.equal(saved.ok, true);
+  assert.equal(state.stored().length, 1_000);
+  assert.equal((await repository.findById("old-0" as TaskExecutionId)).ok, true);
+  const latestHistory = await repository.findLatestByTask("task-with-history" as TaskId);
+  const latestNew = await repository.findLatestByTask("another-task" as TaskId);
+  assert.equal(latestHistory.ok && latestHistory.value?.id, "old-1001");
+  assert.equal(latestNew.ok && latestNew.value?.id, "new-history");
 });

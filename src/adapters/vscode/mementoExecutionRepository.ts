@@ -22,6 +22,7 @@ interface StoredExecution {
 }
 
 const STORAGE_KEY = "amazingMultiCodex.executions.v1";
+const MAX_RETAINED_EXECUTIONS = 1_000;
 
 export class MementoExecutionRepository implements ExecutionRepository {
   private readonly writes = new AsyncOperationQueue();
@@ -81,8 +82,9 @@ export class MementoExecutionRepository implements ExecutionRepository {
     const stored = toStored(record);
     if (index === -1) records.value.unshift(stored);
     else records.value[index] = stored;
+    const compacted = compactExecutionHistory(records.value);
     try {
-      await this.state.update(STORAGE_KEY, records.value);
+      await this.state.update(STORAGE_KEY, compacted);
       return ok(undefined);
     } catch (cause) {
       return err({
@@ -104,6 +106,24 @@ export class MementoExecutionRepository implements ExecutionRepository {
       return err(persistenceFailure(cause));
     }
   }
+}
+
+function compactExecutionHistory(records: readonly StoredExecution[]): StoredExecution[] {
+  if (records.length <= MAX_RETAINED_EXECUTIONS) return [...records];
+  const newestFirst = [...records].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+  const retained = new Map<string, StoredExecution>();
+  const tasksWithHistory = new Set<string>();
+  for (const record of newestFirst) {
+    if (["prepared", "running"].includes(record.status) || !tasksWithHistory.has(record.taskId)) {
+      retained.set(record.id, record);
+      tasksWithHistory.add(record.taskId);
+    }
+  }
+  for (const record of newestFirst) {
+    if (retained.size >= MAX_RETAINED_EXECUTIONS) break;
+    retained.set(record.id, record);
+  }
+  return [...retained.values()].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
 }
 
 function isStoredExecution(value: unknown): value is StoredExecution {
