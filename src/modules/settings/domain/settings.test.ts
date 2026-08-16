@@ -30,3 +30,14 @@ test("rejects validation timeouts outside the safe range", () => {
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.error.code, "settings.validation-timeout");
 });
+
+test("returns typed errors for malformed runtime configuration shapes", () => {
+  const executable = parseSettings({ codexExecutable: 42 } as never);
+  assert.equal(executable.ok, false);
+  if (!executable.ok) assert.equal(executable.error.code, "settings.codex-executable");
+  const commands = parseSettings({
+    validationCommands: [{ label: "Test", executable: "npm", args: [42] }]
+  } as never);
+  assert.equal(commands.ok, false);
+  if (!commands.ok) assert.equal(commands.error.code, "settings.validation-commands");
+});

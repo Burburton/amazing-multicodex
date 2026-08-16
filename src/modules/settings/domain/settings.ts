@@ -32,6 +32,18 @@ export const defaultSettings: MultiCodexSettings = {
 };
 
 export function parseSettings(input: SettingsInput): Result<MultiCodexSettings> {
+  if (input.codexExecutable !== undefined && typeof input.codexExecutable !== "string") {
+    return err(settingError("settings.codex-executable", "Codex executable must be a string."));
+  }
+  if (input.defaultModel !== undefined && typeof input.defaultModel !== "string") {
+    return err(settingError("settings.default-model", "Default model must be a string."));
+  }
+  if (input.baseRef !== undefined && typeof input.baseRef !== "string") {
+    return err(settingError("settings.base-ref", "Git base ref must be a string."));
+  }
+  if (input.validationCommands !== undefined && !Array.isArray(input.validationCommands)) {
+    return err(settingError("settings.validation-commands", "Validation commands must be an array."));
+  }
   const value: MultiCodexSettings = {
     codexExecutable: input.codexExecutable ?? defaultSettings.codexExecutable,
     defaultModel: input.defaultModel?.trim() || undefined,
@@ -56,9 +68,7 @@ export function parseSettings(input: SettingsInput): Result<MultiCodexSettings> 
   if (!Number.isInteger(value.validationTimeoutMs) || value.validationTimeoutMs < 1_000 || value.validationTimeoutMs > 3_600_000) {
     return err(settingError("settings.validation-timeout", "Validation timeout must be between 1,000 and 3,600,000 ms."));
   }
-  if (value.validationCommands.length === 0 || value.validationCommands.some(command =>
-    !command.label.trim() || !command.executable.trim() || !Array.isArray(command.args)
-  )) {
+  if (value.validationCommands.length === 0 || !value.validationCommands.every(isValidationCommand)) {
     return err(settingError("settings.validation-commands", "At least one valid validation command is required."));
   }
   return ok({
@@ -66,6 +76,14 @@ export function parseSettings(input: SettingsInput): Result<MultiCodexSettings> 
     codexExecutable: value.codexExecutable.trim(),
     baseRef: value.baseRef.trim()
   });
+}
+
+function isValidationCommand(command: unknown): command is ValidationCommandSetting {
+  if (!command || typeof command !== "object") return false;
+  const value = command as Record<string, unknown>;
+  return typeof value.label === "string" && value.label.trim().length > 0
+    && typeof value.executable === "string" && value.executable.trim().length > 0
+    && Array.isArray(value.args) && value.args.every(argument => typeof argument === "string");
 }
 
 function settingError(code: string, message: string): AppError {
