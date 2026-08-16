@@ -443,6 +443,41 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       void vscode.window.showInformationMessage(`Added prerequisite '${selected.label}' to '${task.title}'.`);
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.removeDependency", async (task?: TaskProps) => {
+      if (!task) {
+        void vscode.window.showErrorMessage("Select a MultiCodex task to remove a prerequisite.");
+        return;
+      }
+      const [edges, listed] = await Promise.all([dependencies.listFor(task.id), repository.list()]);
+      if (!edges.ok) {
+        void vscode.window.showErrorMessage(edges.error.message);
+        return;
+      }
+      if (!listed.ok) {
+        void vscode.window.showErrorMessage(listed.error.message);
+        return;
+      }
+      const titles = new Map(listed.value.map(item => {
+        const snapshot = item.snapshot();
+        return [snapshot.id, snapshot.title] as const;
+      }));
+      const choices = edges.value.map(edge => ({
+        label: titles.get(edge.prerequisiteId) ?? edge.prerequisiteId,
+        taskId: edge.prerequisiteId
+      }));
+      if (choices.length === 0) {
+        void vscode.window.showInformationMessage(`'${task.title}' has no prerequisites.`);
+        return;
+      }
+      const selected = await vscode.window.showQuickPick(choices, { title: `Remove prerequisite from: ${task.title}` });
+      if (!selected) return;
+      const removed = await dependencies.remove(task.id, selected.taskId);
+      if (!removed.ok) {
+        void vscode.window.showErrorMessage(removed.error.message);
+        return;
+      }
+      void vscode.window.showInformationMessage(`Removed prerequisite '${selected.label}' from '${task.title}'.`);
     })
   );
 

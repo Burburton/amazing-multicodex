@@ -27,7 +27,8 @@
     "onCommand:amazingMultiCodex.validateTask",
     "onCommand:amazingMultiCodex.showChanges",
     "onCommand:amazingMultiCodex.integrateTask",
-    "onCommand:amazingMultiCodex.addDependency"
+    "onCommand:amazingMultiCodex.addDependency",
+    "onCommand:amazingMultiCodex.removeDependency"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -149,6 +150,11 @@
         "command": "amazingMultiCodex.addDependency",
         "title": "MultiCodex: Add Prerequisite",
         "icon": "$(references)"
+      },
+      {
+        "command": "amazingMultiCodex.removeDependency",
+        "title": "MultiCodex: Remove Prerequisite",
+        "icon": "$(remove)"
       }
     ],
     "menus": {
@@ -207,6 +213,11 @@
         },
         {
           "command": "amazingMultiCodex.addDependency",
+          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.draft || viewItem == multicodexTask.queued || viewItem == multicodexTask.blocked)",
+          "group": "navigation"
+        },
+        {
+          "command": "amazingMultiCodex.removeDependency",
           "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.draft || viewItem == multicodexTask.queued || viewItem == multicodexTask.blocked)",
           "group": "navigation"
         }
