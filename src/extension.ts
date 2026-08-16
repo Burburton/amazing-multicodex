@@ -28,6 +28,7 @@ import {
   ResumeTaskWorkflow,
   SchedulerPolicy,
   StartTaskWorkflow,
+  SteerTaskWorkflow,
   TaskDetailQuery,
   ValidateTaskWorkflow
 } from "./modules/orchestration/public";
@@ -98,6 +99,7 @@ export function activate(context: vscode.ExtensionContext): void {
     queue: "amazingMultiCodex.queueTask",
     start: "amazingMultiCodex.startTask",
     resume: "amazingMultiCodex.resumeTask",
+    steer: "amazingMultiCodex.steerTask",
     cancel: "amazingMultiCodex.cancelTask",
     validate: "amazingMultiCodex.validateTask",
     changes: "amazingMultiCodex.showChanges",
@@ -452,6 +454,51 @@ export function activate(context: vscode.ExtensionContext): void {
         description: record.kind,
         detail: record.detail
       })), { title: `Activity: ${task.title}`, matchOnDetail: true });
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.steerTask", async (task?: TaskProps) => {
+      task = await selectTask(
+        task,
+        candidate => candidate.status === "running" && connectedTasks.has(candidate.id),
+        "Send follow-up instructions"
+      );
+      if (!task) return;
+      if (!connectedTasks.has(task.id)) {
+        void vscode.window.showInformationMessage(`Resume '${task.title}' before sending follow-up instructions.`);
+        return;
+      }
+      const prompt = await vscode.window.showInputBox({
+        prompt: `Follow-up instructions for: ${task.title}`,
+        placeHolder: "Clarify priorities, constraints, or the next step",
+        validateInput: value => !value.trim()
+          ? "Follow-up instructions are required."
+          : value.trim().length > 20_000 ? "Follow-up instructions cannot exceed 20,000 characters." : undefined
+      });
+      if (!prompt?.trim()) return;
+      const agent = codex.current();
+      if (!agent || agent.health().status !== "ready") {
+        connectedTasks.delete(task.id);
+        void vscode.window.showErrorMessage("Codex App Server is disconnected. Resume the task before sending a follow-up.");
+        return;
+      }
+      const steered = await new SteerTaskWorkflow(lifecycle, executions, agent).execute({
+        taskId: task.id,
+        prompt
+      });
+      if (!steered.ok) {
+        void vscode.window.showErrorMessage(steered.error.message);
+        return;
+      }
+      const recorded = await activity.record({
+        taskId: task.id,
+        kind: "lifecycle",
+        summary: "Follow-up instructions sent"
+      });
+      await taskDetails.refresh(task.id);
+      if (!recorded.ok) {
+        void vscode.window.showWarningMessage("Follow-up sent, but its activity marker could not be persisted.");
+      } else {
+        void vscode.window.showInformationMessage(`Sent follow-up instructions to: ${task.title}`);
+      }
     }),
     vscode.commands.registerCommand("amazingMultiCodex.showTaskDetails", async (task?: TaskProps) => {
       task = await selectTask(task, () => true, "Open task details");

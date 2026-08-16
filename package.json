@@ -41,6 +41,7 @@
     "onCommand:amazingMultiCodex.dispatchQueue",
     "onCommand:amazingMultiCodex.startTask",
     "onCommand:amazingMultiCodex.resumeTask",
+    "onCommand:amazingMultiCodex.steerTask",
     "onCommand:amazingMultiCodex.showActivity",
     "onCommand:amazingMultiCodex.showTaskDetails",
     "onCommand:amazingMultiCodex.cancelTask",
@@ -203,6 +204,11 @@
         "icon": "$(debug-continue)"
       },
       {
+        "command": "amazingMultiCodex.steerTask",
+        "title": "MultiCodex: Send Follow-up",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "amazingMultiCodex.showActivity",
         "title": "MultiCodex: Show Task Activity",
         "icon": "$(history)"
@@ -301,6 +307,11 @@
           "command": "amazingMultiCodex.resumeTask",
           "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.running",
           "group": "inline"
+        },
+        {
+          "command": "amazingMultiCodex.steerTask",
+          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.running",
+          "group": "navigation"
         },
         {
           "command": "amazingMultiCodex.showActivity",

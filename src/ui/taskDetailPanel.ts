@@ -4,10 +4,10 @@ import { TaskDetailProjection } from "../modules/orchestration/public";
 import { TaskId, TaskProps } from "../modules/tasks/public";
 import { taskPriorityLabel, taskStatusLabel } from "./taskPresentation";
 
-export type TaskDetailAction = "edit" | "queue" | "start" | "resume" | "cancel" | "validate" | "changes" | "integrate" | "recoverIntegration" | "release";
+export type TaskDetailAction = "edit" | "queue" | "start" | "resume" | "steer" | "cancel" | "validate" | "changes" | "integrate" | "recoverIntegration" | "release";
 
 const allowedActions = new Set<TaskDetailAction>([
-  "edit", "queue", "start", "resume", "cancel", "validate", "changes", "integrate", "recoverIntegration", "release"
+  "edit", "queue", "start", "resume", "steer", "cancel", "validate", "changes", "integrate", "recoverIntegration", "release"
 ]);
 
 export class TaskDetailPanelManager implements vscode.Disposable {
@@ -133,7 +133,11 @@ function actionsFor(
       ? [...inspect, { id: "integrate", label: "Retry integration" }]
       : [...inspect, { id: "queue", label: "Retry task" }];
     case "queued": return [{ id: "start", label: "Start now" }];
-    case "running": return [{ id: "resume", label: "Resume" }, { id: "cancel", label: "Cancel" }];
+    case "running": return [
+      { id: "steer", label: "Send follow-up" },
+      { id: "resume", label: "Resume" },
+      { id: "cancel", label: "Cancel" }
+    ];
     case "awaitingApproval": return [{ id: "cancel", label: "Cancel" }];
     case "validating": return [{ id: "validate", label: "Run validation" }, { id: "changes", label: "View changes" }];
     case "readyForReview": return [{ id: "changes", label: "View changes" }, { id: "integrate", label: "Integrate" }];

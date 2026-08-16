@@ -7,6 +7,8 @@ export { DispatchQueuedTasksWorkflow } from "./application/dispatchQueuedTasksWo
 export type { DispatchQueuedTasksCommand, DispatchQueuedTasksReport } from "./application/dispatchQueuedTasksWorkflow";
 export { ResumeTaskWorkflow } from "./application/resumeTaskWorkflow";
 export type { ResumeTaskWorkflowCommand } from "./application/resumeTaskWorkflow";
+export { SteerTaskWorkflow } from "./application/steerTaskWorkflow";
+export type { SteerTaskWorkflowCommand } from "./application/steerTaskWorkflow";
 export { CancelTaskWorkflow } from "./application/cancelTaskWorkflow";
 export { AbandonTaskWorkflow } from "./application/abandonTaskWorkflow";
 export { ReleaseTaskWorkspaceWorkflow } from "./application/releaseTaskWorkspaceWorkflow";
