@@ -4,10 +4,13 @@ import { GitWorkspaceAdapter } from "./adapters/git-cli/gitWorkspaceAdapter";
 import { NodeCommandRunner } from "./adapters/process/nodeCommandRunner";
 import { NodeProcessFactory } from "./adapters/process/nodeProcessFactory";
 import { MementoActivityRepository } from "./adapters/vscode/mementoActivityRepository";
+import { MementoApprovalRepository } from "./adapters/vscode/mementoApprovalRepository";
 import { MementoExecutionRepository } from "./adapters/vscode/mementoExecutionRepository";
 import { MementoTaskRepository } from "./adapters/vscode/mementoTaskRepository";
 import { AgentActivityBridge } from "./host/agentActivityBridge";
+import { ApprovalBridge } from "./host/approvalBridge";
 import { ActivityService } from "./modules/activity/public";
+import { ApprovalService } from "./modules/approvals/public";
 import { AgentEventCoordinator, ResumeTaskWorkflow, StartTaskWorkflow } from "./modules/orchestration/public";
 import { CreateTaskHandler, TaskLifecycleService, TaskProps } from "./modules/tasks/public";
 import { SystemClock } from "./shared/core/clock";
@@ -31,14 +34,19 @@ export function activate(context: vscode.ExtensionContext): void {
   const activity = new ActivityService(
     new MementoActivityRepository(context.workspaceState), clock, ids
   );
+  const approvals = new ApprovalService(
+    new MementoApprovalRepository(context.workspaceState), clock, ids
+  );
   let coordinator: AgentEventCoordinator | undefined;
   let activityBridge: AgentActivityBridge | undefined;
+  let approvalBridge: ApprovalBridge | undefined;
 
   context.subscriptions.push(
     tree,
     { dispose: () => {
       coordinator?.stop();
       activityBridge?.stop();
+      approvalBridge?.stop();
       codex.stop();
     } },
     vscode.window.registerTreeDataProvider("amazingMultiCodex.tasks", tree),
@@ -104,6 +112,9 @@ export function activate(context: vscode.ExtensionContext): void {
             error: (message, error) => console.error(message, error)
           });
           activityBridge.start();
+          approvalBridge?.stop();
+          approvalBridge = createApprovalBridge(agent);
+          approvalBridge.start();
           const workflow = new StartTaskWorkflow(
             lifecycle,
             new GitWorkspaceAdapter(new NodeCommandRunner()),
@@ -153,6 +164,9 @@ export function activate(context: vscode.ExtensionContext): void {
           error: (message, error) => console.error(message, error)
         });
         activityBridge.start();
+        approvalBridge?.stop();
+        approvalBridge = createApprovalBridge(agent);
+        approvalBridge.start();
         const resumed = await new ResumeTaskWorkflow(lifecycle, agent, executions, clock)
           .execute({ taskId: task.id });
         if (!resumed.ok) {
@@ -186,6 +200,20 @@ export function activate(context: vscode.ExtensionContext): void {
       })), { title: `Activity: ${task.title}`, matchOnDetail: true });
     })
   );
+
+  function createApprovalBridge(agent: Awaited<ReturnType<CodexProcessSupervisor["start"]>>): ApprovalBridge {
+    return new ApprovalBridge(agent, executions, approvals, lifecycle, {
+      async decide(approval) {
+        const selection = await vscode.window.showWarningMessage(
+          approval.detail ? `${approval.title}\n\n${approval.detail}` : approval.title,
+          { modal: true },
+          "Approve",
+          "Decline"
+        );
+        return selection === "Approve" ? "approved" : selection === "Decline" ? "declined" : "cancelled";
+      }
+    });
+  }
 }
 
 export function deactivate(): void {

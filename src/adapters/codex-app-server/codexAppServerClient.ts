@@ -36,8 +36,7 @@ interface NotificationEnvelope {
 
 const approvalMethods = [
   "item/commandExecution/requestApproval",
-  "item/fileChange/requestApproval",
-  "item/tool/requestUserInput"
+  "item/fileChange/requestApproval"
 ] as const;
 
 export class CodexAppServerClient implements AgentRuntimePort {
@@ -224,4 +223,3 @@ function envelope(value: unknown): NotificationEnvelope {
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
-
