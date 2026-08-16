@@ -83,12 +83,12 @@ export class CodexProcessSupervisor {
     child.stderr.on("data", chunk => this.diagnostics.stderr(String(chunk)));
     this.disposers = [
       child.onExit(exit => {
-        this.diagnostics.exited(exit);
         this.release(new Error(`Codex exited with code ${String(exit.code)}.`));
+        this.diagnostics.exited(exit);
       }),
       child.onError(error => {
-        this.diagnostics.processError(error);
         this.release(error);
+        this.diagnostics.processError(error);
       })
     ];
 
@@ -117,4 +117,3 @@ export class CodexProcessSupervisor {
 function supervisorError(code: string, message: string, cause: unknown): AppError {
   return { code, category: "unavailable", message, retryable: true, cause };
 }
-

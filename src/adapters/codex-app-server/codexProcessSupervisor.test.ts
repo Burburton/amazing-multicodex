@@ -76,6 +76,26 @@ test("marks the client disconnected and rejects pending work on exit", async () 
   assert.equal(supervisor.current(), undefined);
 });
 
+test("releases runtime state before reporting process exit", async () => {
+  const factory = new FakeProcessFactory();
+  let supervisor!: CodexProcessSupervisor;
+  let currentDuringExit: ReturnType<CodexProcessSupervisor["current"]> | undefined;
+  supervisor = new CodexProcessSupervisor(factory, {
+    malformedProtocolLine: () => undefined,
+    stderr: () => undefined,
+    exited: () => { currentDuringExit = supervisor.current(); },
+    processError: () => undefined
+  });
+  const starting = supervisor.start();
+  await new Promise(resolve => setImmediate(resolve));
+  factory.child.reply(0, {});
+  await starting;
+
+  factory.child.events.emit("exit", { code: 1, signal: null });
+
+  assert.equal(currentDuringExit, undefined);
+});
+
 test("stop is idempotent and terminates the child", async () => {
   const factory = new FakeProcessFactory();
   const supervisor = new CodexProcessSupervisor(factory);
@@ -87,4 +107,3 @@ test("stop is idempotent and terminates the child", async () => {
   supervisor.stop();
   assert.equal(factory.child.terminated, true);
 });
-
