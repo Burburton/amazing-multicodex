@@ -76,3 +76,20 @@ test("interrupts the turn before making execution and task cancellation terminal
   const execution = await executions.findById("execution-1" as TaskExecutionId);
   assert.equal(execution.ok && execution.value?.status, "cancelled");
 });
+
+test("refuses to interrupt an execution while its task is still preparing", async () => {
+  const clock = new FixedClock();
+  const tasks = new InMemoryTaskRepository();
+  const task = Task.create({ id: "task-1" as TaskId, title: "Task", now: clock.now() });
+  assert.equal(task.ok, true);
+  if (!task.ok) return;
+  for (const status of ["queued", "preparing"] as const) task.value.transition(status, clock.now());
+  await tasks.save(task.value, -1);
+  const agent = new InterruptingAgent();
+  const result = await new CancelTaskWorkflow(
+    new TaskLifecycleService(tasks, clock), agent, new InMemoryExecutionRepository(), clock
+  ).execute("task-1" as TaskId);
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "task.not-cancellable");
+  assert.equal(agent.interrupted, undefined);
+});

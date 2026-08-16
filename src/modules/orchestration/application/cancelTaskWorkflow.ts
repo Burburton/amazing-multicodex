@@ -13,6 +13,11 @@ export class CancelTaskWorkflow {
   ) {}
 
   async execute(taskId: TaskId): Promise<Result<TaskExecutionRecord>> {
+    const task = await this.tasks.get(taskId);
+    if (!task.ok) return task;
+    if (task.value.status !== "running" && task.value.status !== "awaitingApproval") {
+      return err(notCancellable(taskId, task.value.status));
+    }
     const active = await this.executions.findActiveByTask(taskId);
     if (!active.ok) return active;
     if (!active.value) return err(noActiveExecution(taskId));
@@ -31,9 +36,19 @@ export class CancelTaskWorkflow {
     };
     const saved = await this.executions.save(cancelled, active.value.version);
     if (!saved.ok) return saved;
-    const task = await this.tasks.transition(taskId, "cancelled", "user-requested");
-    return task.ok ? ok(cancelled) : task;
+    const transitioned = await this.tasks.transition(taskId, "cancelled", "user-requested");
+    return transitioned.ok ? ok(cancelled) : transitioned;
   }
+}
+
+function notCancellable(taskId: TaskId, status: string): AppError {
+  return {
+    code: "task.not-cancellable",
+    category: "conflict",
+    message: "Only running tasks can be cancelled.",
+    retryable: false,
+    context: { taskId, status }
+  };
 }
 
 function noActiveExecution(taskId: TaskId): AppError {
@@ -43,4 +58,3 @@ function noActiveExecution(taskId: TaskId): AppError {
 function interruptFailed(cause: unknown): AppError {
   return { code: "codex.interrupt-failed", category: "unavailable", message: "Codex execution could not be interrupted.", retryable: true, cause };
 }
-
