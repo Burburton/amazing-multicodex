@@ -264,12 +264,12 @@
         },
         {
           "command": "amazingMultiCodex.addDependency",
-          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.draft || viewItem == multicodexTask.queued || viewItem == multicodexTask.blocked)",
+          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.draft",
           "group": "navigation"
         },
         {
           "command": "amazingMultiCodex.removeDependency",
-          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.draft || viewItem == multicodexTask.queued || viewItem == multicodexTask.blocked)",
+          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.draft",
           "group": "navigation"
         },
         {

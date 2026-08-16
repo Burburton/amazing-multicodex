@@ -48,3 +48,29 @@ test("serializes concurrent dependency mutations without losing edges", async ()
   const listed = await service.listFor("c" as TaskId);
   assert.equal(listed.ok && listed.value.length, 2);
 });
+
+test("locks dependency changes after a task leaves draft", async () => {
+  const tasks = new InMemoryTaskRepository();
+  for (const id of ["a", "b"]) {
+    const task = Task.create({ id: id as TaskId, title: id, now: new Date() });
+    assert.equal(task.ok, true);
+    if (!task.ok) return;
+    await tasks.save(task.value, -1);
+  }
+  const repository = new InMemoryTaskDependencyRepository();
+  const service = new TaskDependencyService(repository, tasks);
+  assert.equal((await service.add("b" as TaskId, "a" as TaskId)).ok, true);
+  const target = await tasks.findById("b" as TaskId);
+  assert.equal(target.ok, true);
+  if (!target.ok || !target.value) return;
+  target.value.transition("queued", new Date());
+  await tasks.save(target.value, 0);
+
+  const added = await service.add("b" as TaskId, "a" as TaskId);
+  const removed = await service.remove("b" as TaskId, "a" as TaskId);
+  assert.equal(added.ok, false);
+  assert.equal(removed.ok, false);
+  if (!added.ok) assert.equal(added.error.code, "task.dependencies-locked");
+  const listed = await service.listFor("b" as TaskId);
+  assert.equal(listed.ok && listed.value.length, 1);
+});

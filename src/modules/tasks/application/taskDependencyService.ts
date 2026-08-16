@@ -24,6 +24,7 @@ export class TaskDependencyService {
     if (!task.ok) return task;
     if (!prerequisite.ok) return prerequisite;
     if (!task.value || !prerequisite.value) return err(notFound());
+    if (task.value.snapshot().status !== "draft") return err(notDraft(taskId));
     const listed = await this.dependencies.list();
     if (!listed.ok) return listed;
     const graph = new TaskDependencyGraph(listed.value.map(edge => [edge.taskId, edge.prerequisiteId]));
@@ -38,6 +39,10 @@ export class TaskDependencyService {
   }
 
   private async removeOnce(taskId: TaskId, prerequisiteId: TaskId): Promise<Result<void>> {
+    const task = await this.tasks.findById(taskId);
+    if (!task.ok) return task;
+    if (!task.value) return err(notFound());
+    if (task.value.snapshot().status !== "draft") return err(notDraft(taskId));
     const listed = await this.dependencies.list();
     if (!listed.ok) return listed;
     return this.dependencies.replace(listed.value.filter(edge =>
@@ -67,4 +72,14 @@ export class TaskDependencyService {
 
 function notFound(): AppError {
   return { code: "task.dependency-not-found", category: "validation", message: "Both tasks must exist before adding a dependency.", retryable: false };
+}
+
+function notDraft(taskId: TaskId): AppError {
+  return {
+    code: "task.dependencies-locked",
+    category: "conflict",
+    message: "Task dependencies can only be changed while the task is a draft.",
+    retryable: false,
+    context: { taskId }
+  };
 }
