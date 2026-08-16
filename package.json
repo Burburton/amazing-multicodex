@@ -34,6 +34,10 @@
   },
   "activationEvents": [
     "onView:amazingMultiCodex.tasks",
+    "onView:amazingMultiCodex.projects",
+    "onCommand:amazingMultiCodex.addProject",
+    "onCommand:amazingMultiCodex.refreshProjects",
+    "onCommand:amazingMultiCodex.showProjectDetails",
     "onCommand:amazingMultiCodex.createTask",
     "onCommand:amazingMultiCodex.editTask",
     "onCommand:amazingMultiCodex.refreshTasks",
@@ -153,6 +157,11 @@
     "views": {
       "explorer": [
         {
+          "id": "amazingMultiCodex.projects",
+          "name": "MultiCodex Projects",
+          "when": "true"
+        },
+        {
           "id": "amazingMultiCodex.tasks",
           "name": "MultiCodex Tasks",
           "when": "true"
@@ -161,12 +170,32 @@
     },
     "viewsWelcome": [
       {
+        "view": "amazingMultiCodex.projects",
+        "contents": "Manage repositories and project-level task health.\n[Add a Git project](command:amazingMultiCodex.addProject)\n[Refresh projects](command:amazingMultiCodex.refreshProjects)",
+        "when": "amazingMultiCodex.hasProjects == false"
+      },
+      {
         "view": "amazingMultiCodex.tasks",
         "contents": "Coordinate isolated Codex tasks in this Git workspace.\n[Create your first task](command:amazingMultiCodex.createTask)\n[Check runtime status](command:amazingMultiCodex.showRuntimeStatus)\n[Configure MultiCodex](command:workbench.action.openSettings?%5B%22%40ext%3Aamazing-multicodex.amazing-multicodex%22%5D)",
         "when": "amazingMultiCodex.hasTasks == false"
       }
     ],
     "commands": [
+      {
+        "command": "amazingMultiCodex.addProject",
+        "title": "MultiCodex: Add Project",
+        "icon": "$(repo-create)"
+      },
+      {
+        "command": "amazingMultiCodex.refreshProjects",
+        "title": "MultiCodex: Refresh Projects",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "amazingMultiCodex.showProjectDetails",
+        "title": "MultiCodex: Show Project Details",
+        "icon": "$(dashboard)"
+      },
       {
         "command": "amazingMultiCodex.createTask",
         "title": "MultiCodex: Create Task"
@@ -268,6 +297,16 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "amazingMultiCodex.addProject",
+          "when": "view == amazingMultiCodex.projects",
+          "group": "navigation"
+        },
+        {
+          "command": "amazingMultiCodex.refreshProjects",
+          "when": "view == amazingMultiCodex.projects",
+          "group": "navigation"
+        },
         {
           "command": "amazingMultiCodex.createTask",
           "when": "view == amazingMultiCodex.tasks",

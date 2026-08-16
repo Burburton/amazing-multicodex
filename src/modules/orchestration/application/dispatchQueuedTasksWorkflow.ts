@@ -3,8 +3,12 @@ import { TaskDependencyService, TaskId, TaskRepository } from "../../tasks/publi
 import { SchedulerPolicy } from "../domain/scheduler";
 import { ExecutionRepository } from "../ports/executionRepository";
 import { StartTaskWorkflow, StartTaskWorkflowCommand } from "./startTaskWorkflow";
+import { ProjectId } from "../../projects/public";
 
-export type DispatchQueuedTasksCommand = Omit<StartTaskWorkflowCommand, "taskId">;
+export type DispatchQueuedTasksCommand = Omit<StartTaskWorkflowCommand, "taskId"> & {
+  readonly projectId?: ProjectId;
+  readonly includeUnassigned?: boolean;
+};
 
 export interface DispatchQueuedTasksReport {
   readonly selected: readonly TaskId[];
@@ -26,7 +30,11 @@ export class DispatchQueuedTasksWorkflow {
     if (!listed.ok) return listed;
     if (!active.ok) return active;
 
-    const queued = listed.value.filter(task => task.snapshot().status === "queued");
+    const queued = listed.value.filter(task => {
+      const snapshot = task.snapshot();
+      return snapshot.status === "queued" && (snapshot.projectId === command.projectId
+        || (command.includeUnassigned === true && snapshot.projectId === undefined));
+    });
     const readiness = await Promise.all(queued.map(async task => {
       const snapshot = task.snapshot();
       const ready = await this.dependencies.prerequisitesSatisfied(snapshot.id);
@@ -45,7 +53,8 @@ export class DispatchQueuedTasksWorkflow {
     const started: TaskId[] = [];
     const failures: { taskId: TaskId; error: AppError }[] = [];
     for (const taskId of selected) {
-      const result = await this.starter.execute({ ...command, taskId });
+      const { projectId: _projectId, includeUnassigned: _includeUnassigned, ...startCommand } = command;
+      const result = await this.starter.execute({ ...startCommand, taskId });
       if (result.ok) started.push(taskId);
       else failures.push({ taskId, error: result.error });
     }

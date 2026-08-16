@@ -97,6 +97,7 @@ function isStoredTask(value: unknown): value is StoredTask {
   if (!value || typeof value !== "object") return false;
   const task = value as Record<string, unknown>;
   return typeof task.id === "string" && task.id.length > 0 && task.id.length <= 1_000
+    && (task.projectId === undefined || (typeof task.projectId === "string" && task.projectId.length > 0 && task.projectId.length <= 1_000))
     && typeof task.title === "string" && task.title.length > 0 && task.title.length <= 200
     && (task.description === undefined || (typeof task.description === "string" && task.description.length <= 20_000))
     && (task.statusReason === undefined || (typeof task.statusReason === "string" && task.statusReason.length <= 2_000))

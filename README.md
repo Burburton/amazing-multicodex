@@ -1,6 +1,7 @@
 # Amazing MultiCodex
 
-An orchestration control plane for running and reviewing multiple Codex tasks inside VS Code.
+An orchestration control plane for running and reviewing multiple Codex tasks
+across local Git projects inside VS Code.
 
 The project is being rebuilt around a modular, adapter-driven architecture. See
 [the architecture baseline](docs/architecture.md) for module boundaries,
@@ -11,6 +12,9 @@ dependency rules, runtime design, and delivery slices.
 The extension currently provides the core multi-task execution loop:
 
 - persistent tasks, execution associations, approvals, and bounded activity;
+- a persistent project registry with one repository root and base ref per project;
+- a `MultiCodex Projects` dashboard with task, active-work, attention, and
+  completion metrics plus clickable task drill-down;
 - a `MultiCodex Tasks` Explorer view with create, start, resume, cancel, and
   activity commands;
 - command-palette task selection filtered to the states accepted by each action;
@@ -83,7 +87,11 @@ npm run package
 code --install-extension ./amazing-multicodex-0.1.0.vsix
 ```
 
-Reload VS Code, open Explorer, and find the `MultiCodex Tasks` view. Its empty
+Reload VS Code, open Explorer, and find the `MultiCodex Projects` and
+`MultiCodex Tasks` views. Workspace Git roots are registered automatically;
+use `MultiCodex: Add Project` to register another local repository. Click a
+project to open its dashboard and click any task row to drill into task details.
+The task view's empty
 state links directly to task creation, runtime status, and extension settings.
 This Explorer view is the main visual interface: click a task to open its live
 detail panel, use inline buttons for its next action, or right-click for all
@@ -92,8 +100,8 @@ Palette (`Ctrl/Cmd+Shift+P`) under `MultiCodex:` and prompt for an eligible task
 
 The normal task flow is:
 
-1. Create and, if needed, edit a draft with a title, context, acceptance
-   criteria, and priority.
+1. Create a task, choose its project, and, if needed, edit the draft with a
+   title, context, acceptance criteria, and priority.
 2. Optionally add prerequisites while the task is still a draft.
 3. Queue the task. Ready tasks dispatch automatically up to the configured
    concurrency limit.

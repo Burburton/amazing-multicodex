@@ -1,5 +1,6 @@
 import { Brand } from "../../../shared/core/brand";
 import { AppError, Result, err, ok } from "../../../shared/core/result";
+import { ProjectId } from "../../projects/public";
 
 export type TaskId = Brand<string, "TaskId">;
 
@@ -22,6 +23,7 @@ export type TaskPriority = "low" | "normal" | "high" | "urgent";
 
 export interface TaskProps {
   readonly id: TaskId;
+  readonly projectId?: ProjectId;
   readonly title: string;
   readonly description?: string;
   readonly acceptanceCriteria: readonly string[];
@@ -35,6 +37,7 @@ export interface TaskProps {
 
 export interface NewTaskProps {
   readonly id: TaskId;
+  readonly projectId?: ProjectId;
   readonly title: string;
   readonly description?: string;
   readonly acceptanceCriteria?: readonly string[];
@@ -78,6 +81,7 @@ export class Task {
     if (!definition.ok) return definition;
     return ok(new Task({
       id: input.id,
+      ...(input.projectId ? { projectId: input.projectId } : {}),
       ...definition.value,
       priority: input.priority ?? "normal",
       status: "draft",

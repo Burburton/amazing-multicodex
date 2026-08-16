@@ -3,8 +3,10 @@ import { IdGenerator } from "../../../shared/core/idGenerator";
 import { Result } from "../../../shared/core/result";
 import { Task, TaskId, TaskPriority, TaskProps } from "../domain/task";
 import { TaskRepository } from "../ports/taskRepository";
+import { ProjectId } from "../../projects/public";
 
 export interface CreateTaskCommand {
+  readonly projectId?: ProjectId;
   readonly title: string;
   readonly description?: string;
   readonly acceptanceCriteria?: readonly string[];
@@ -21,6 +23,7 @@ export class CreateTaskHandler {
   async execute(command: CreateTaskCommand): Promise<Result<TaskProps>> {
     const created = Task.create({
       id: this.ids.next() as TaskId,
+      projectId: command.projectId,
       title: command.title,
       description: command.description,
       acceptanceCriteria: command.acceptanceCriteria,
@@ -34,4 +37,3 @@ export class CreateTaskHandler {
     return { ok: true, value: created.value.snapshot() };
   }
 }
-

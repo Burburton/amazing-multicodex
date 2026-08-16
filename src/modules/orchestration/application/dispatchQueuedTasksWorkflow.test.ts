@@ -5,6 +5,7 @@ import { Task, TaskDependency, TaskDependencyRepository, TaskDependencyService, 
 import { Result, ok } from "../../../shared/core/result";
 import { SchedulerPolicy } from "../domain/scheduler";
 import { DispatchQueuedTasksWorkflow } from "./dispatchQueuedTasksWorkflow";
+import { ProjectId } from "../../projects/public";
 
 class TaskMemory implements TaskRepository {
   private readonly values = new Map<TaskId, Task>();
@@ -96,4 +97,30 @@ test("continues dispatching when one selected task fails to start", async () => 
     assert.deepEqual(result.value.started, ["second"]);
     assert.equal(result.value.failures[0]?.taskId, "first");
   }
+});
+
+test("dispatches only tasks assigned to the requested project", async () => {
+  const tasks = new TaskMemory();
+  for (const [id, projectId] of [["api-task", "api"], ["web-task", "web"]] as const) {
+    const created = Task.create({ id: id as TaskId, projectId: projectId as ProjectId, title: id, now: new Date(0) });
+    assert.equal(created.ok, true);
+    if (!created.ok) return;
+    created.value.transition("queued", new Date(0));
+    await tasks.save(created.value, -1);
+  }
+  const calls: TaskId[] = [];
+  const starter = { execute: async ({ taskId }: { taskId: TaskId }) => {
+    calls.push(taskId);
+    return { ok: true as const, value: undefined as never };
+  } };
+  const dependencies = new TaskDependencyService(new DependencyMemory(), tasks);
+  const workflow = new DispatchQueuedTasksWorkflow(
+    tasks, new InMemoryExecutionRepository(), dependencies, new SchedulerPolicy(), starter as never
+  );
+  const result = await workflow.execute({
+    projectId: "api" as ProjectId, repositoryRoot: "/api", worktreeRoot: "/trees/api",
+    baseRef: "main", concurrencyLimit: 2
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, ["api-task"]);
 });

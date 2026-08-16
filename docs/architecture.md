@@ -5,7 +5,7 @@ Last updated: 2026-08-16
 
 ## Implementation status
 
-The module boundaries, task lifecycle, dependency-aware scheduler, Codex App
+The module boundaries, project registry, task lifecycle, dependency-aware scheduler, Codex App
 Server adapter, Git worktrees, approvals, validation, review, and explicit
 integration workflows are implemented. Architecture dependencies are enforced
 by `scripts/check-architecture.js` in `npm run check`.
@@ -15,7 +15,8 @@ repository ports, with optimistic versions and serialized read-modify-write
 operations. This is an intentional transitional implementation, not a change
 to the SQLite decision in section 10. Lifecycle-driven dispatch, restart
 reconciliation, safe workspace cleanup, and a reusable task-detail webview are
-implemented. The current presentation includes a sorted Explorer task board,
+implemented. The current presentation includes an Explorer project overview,
+click-through project dashboards, a sorted task board,
 state-filtered Command Palette actions, editable drafts, task follow-ups, an
 actionable readiness report, and a live-refreshing detail/activity panel.
 
@@ -102,6 +103,7 @@ editor-time feedback layer.
 
 The product owns:
 
+- local Git project identity and task-to-project assignment;
 - task identity, lifecycle, priority, and dependencies;
 - scheduling and concurrency policy;
 - association between tasks, Codex threads, branches, and worktrees;
@@ -121,7 +123,22 @@ The product does not own:
 
 ## 5. Bounded modules
 
-### 5.1 `tasks`
+### 5.1 `projects`
+
+Owns the local Git repositories managed by the control plane.
+
+Responsibilities:
+
+- register a repository root, display name, and base ref;
+- provide stable project identities for task assignment;
+- keep project persistence behind a repository port;
+- support project-level status projections without coupling the domain to UI.
+
+The project module does not inspect Git itself or know how tasks are rendered.
+Git-root validation belongs to the host/adapters and aggregate metrics are UI
+projections over task snapshots.
+
+### 5.2 `tasks`
 
 Owns the user-visible unit of work.
 
@@ -156,7 +173,7 @@ type TaskStatus =
 `tasks` does not know how Codex runs, how a worktree is created, or how the UI
 renders a task.
 
-### 5.2 `orchestration`
+### 5.3 `orchestration`
 
 Owns workflow coordination across modules.
 
@@ -181,7 +198,7 @@ Initial scheduling policy:
 5. one active task per worktree;
 6. global concurrency limit defaults to two.
 
-### 5.3 `agents`
+### 5.4 `agents`
 
 Owns the product-level representation of an agent execution session.
 
@@ -197,7 +214,7 @@ This module defines `AgentRuntimePort`. The Codex adapter implements it. No
 other module knows about JSON-RPC methods such as `thread/start` or
 `turn/start`.
 
-### 5.4 `workspaces`
+### 5.5 `workspaces`
 
 Owns isolated execution environments.
 
@@ -213,7 +230,7 @@ Responsibilities:
 Destructive cleanup is never implicit. Cleanup requires an explicit command and
 a successful safety check.
 
-### 5.5 `approvals`
+### 5.6 `approvals`
 
 Owns durable approval requests and decisions.
 
@@ -229,7 +246,7 @@ Responsibilities:
 Approval transport is separated from approval policy. The Codex adapter carries
 the response; this module decides whether a decision exists and who may make it.
 
-### 5.6 `validation`
+### 5.7 `validation`
 
 Owns quality gates.
 
@@ -245,7 +262,7 @@ Responsibilities:
 A validation profile references immutable check definitions. A task stores the
 profile ID and result snapshot used for its review.
 
-### 5.7 `integration`
+### 5.8 `integration`
 
 Owns promotion of reviewed work.
 
@@ -260,7 +277,7 @@ Responsibilities:
 Supported initial strategies should be `merge` and `squash`; rebase can be
 added after conflict recovery is designed.
 
-### 5.8 `activity`
+### 5.9 `activity`
 
 Owns the normalized append-only activity timeline and UI read projections.
 
@@ -275,7 +292,7 @@ Responsibilities:
 Activity records are observations, not the source of truth for task state.
 Authoritative state lives in module repositories.
 
-### 5.9 `settings`
+### 5.10 `settings`
 
 Owns validated application configuration.
 

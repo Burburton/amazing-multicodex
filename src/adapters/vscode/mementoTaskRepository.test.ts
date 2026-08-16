@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Task, TaskId } from "../../modules/tasks/public";
+import { ProjectId } from "../../modules/projects/public";
 import { KeyValueState } from "../../shared/ports/keyValueState";
 import { MementoTaskRepository } from "./mementoTaskRepository";
 
@@ -15,6 +16,7 @@ test("round-trips tasks without leaking serialized date representation", async (
   const repository = new MementoTaskRepository(new FakeState());
   const created = Task.create({
     id: "task-1" as TaskId,
+    projectId: "project-1" as ProjectId,
     title: "Persist me",
     now: new Date("2026-08-15T12:00:00Z")
   });
@@ -26,6 +28,7 @@ test("round-trips tasks without leaking serialized date representation", async (
   if (!found.ok || !found.value) return;
   assert.equal(found.value.snapshot().createdAt instanceof Date, true);
   assert.equal(found.value.snapshot().title, "Persist me");
+  assert.equal(found.value.snapshot().projectId, "project-1");
 });
 
 test("returns a typed error for malformed stored task state", async () => {

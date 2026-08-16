@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { basename as pathBaseName, resolve as pathResolve } from "node:path";
 import { CodexProcessSupervisor } from "./adapters/codex-app-server/codexProcessSupervisor";
 import { GitWorkspaceAdapter } from "./adapters/git-cli/gitWorkspaceAdapter";
 import { GitIntegrationAdapter } from "./adapters/git-cli/gitIntegrationAdapter";
@@ -9,6 +10,7 @@ import { MementoApprovalRepository } from "./adapters/vscode/mementoApprovalRepo
 import { MementoExecutionRepository } from "./adapters/vscode/mementoExecutionRepository";
 import { MementoTaskRepository } from "./adapters/vscode/mementoTaskRepository";
 import { MementoTaskDependencyRepository } from "./adapters/vscode/mementoTaskDependencyRepository";
+import { MementoProjectRepository } from "./adapters/vscode/mementoProjectRepository";
 import { AgentActivityBridge } from "./host/agentActivityBridge";
 import { ApprovalBridge } from "./host/approvalBridge";
 import { RuntimePreflight } from "./host/runtimePreflight";
@@ -53,12 +55,17 @@ import { redactAndTruncateSensitiveText } from "./shared/core/sensitiveData";
 import { TaskTreeProvider } from "./ui/taskTreeProvider";
 import { TaskDetailPanelManager, TaskDetailAction } from "./ui/taskDetailPanel";
 import { sortTasksForDisplay, taskPriorityLabel, taskStatusLabel } from "./ui/taskPresentation";
+import { ProjectId, ProjectProps, ProjectService } from "./modules/projects/public";
+import { ProjectTreeProvider } from "./ui/projectTreeProvider";
+import { ProjectDetailPanelManager } from "./ui/projectDetailPanel";
 
 export function activate(context: vscode.ExtensionContext): void {
   const connectedTasks = new Set<TaskProps["id"]>();
   const validatingTasks = new Set<TaskProps["id"]>();
   const repository = new MementoTaskRepository(context.workspaceState);
   const clock = new SystemClock();
+  const projectRepository = new MementoProjectRepository(context.workspaceState);
+  const projectService = new ProjectService(projectRepository, clock, new CryptoIdGenerator());
   const createTask = new CreateTaskHandler(repository, clock, new CryptoIdGenerator());
   const reviseTask = new ReviseTaskHandler(repository, clock);
   const lifecycle = new TaskLifecycleService(repository, clock);
@@ -72,6 +79,7 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showErrorMessage(`MultiCodex could not load tasks: ${message}`);
     }
   });
+  const projectTree = new ProjectTreeProvider(projectRepository, repository);
   const ids = new CryptoIdGenerator();
   const codex = new CodexProcessSupervisor(new NodeProcessFactory(), {
     malformedProtocolLine: line => console.warn(
@@ -133,6 +141,17 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showErrorMessage(`${message} ${detail}`);
     }
   );
+  const projectDetails = new ProjectDetailPanelManager(
+    async projectId => {
+      const [listed, projects] = await Promise.all([repository.list(), projectService.list()]);
+      const includeLegacy = projects.ok && projects.value[0]?.id === projectId;
+      return listed.ok ? sortTasksForDisplay(listed.value.map(task => task.snapshot()).filter(task =>
+        task.projectId === projectId || (includeLegacy && task.projectId === undefined)
+      )) : [];
+    },
+    taskId => taskDetails.show(taskId)
+  );
+  const projectsReady = ensureWorkspaceProjects();
   let coordinator: AgentEventCoordinator | undefined;
   let activityBridge: AgentActivityBridge | undefined;
   let approvalBridge: ApprovalBridge | undefined;
@@ -141,6 +160,57 @@ export function activate(context: vscode.ExtensionContext): void {
     dispatchQueueOnce,
     (currentNotify, incomingNotify) => currentNotify || incomingNotify
   );
+
+  async function ensureWorkspaceProjects(): Promise<void> {
+    const settings = readSettings();
+    const baseRef = settings.ok ? settings.value.baseRef : "HEAD";
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      if (folder.uri.scheme !== "file") continue;
+      if (!await isGitRepository(folder.uri.fsPath)) continue;
+      const ensured = await projectService.ensure({
+        name: folder.name || pathBaseName(folder.uri.fsPath),
+        repositoryRoot: folder.uri.fsPath,
+        baseRef
+      });
+      if (!ensured.ok) console.error("Could not register MultiCodex project", ensured.error);
+    }
+    projectTree.refresh();
+  }
+
+  async function isGitRepository(root: string): Promise<boolean> {
+    try {
+      const result = await commandRunner.run({ executable: "git", args: ["rev-parse", "--show-toplevel"], cwd: root, maxOutputBytes: 4_096 });
+      return result.exitCode === 0 && !result.truncated && pathResolve(result.stdout.trim()) === pathResolve(root);
+    } catch {
+      return false;
+    }
+  }
+
+  async function resolveTaskProject(task: TaskProps): Promise<ProjectProps | undefined> {
+    await projectsReady;
+    if (task.projectId) {
+      const found = await projectRepository.findById(task.projectId);
+      if (!found.ok) {
+        console.error("Could not resolve MultiCodex task project", found.error);
+        void vscode.window.showErrorMessage(`Could not load the task project: ${found.error.message}`);
+        return undefined;
+      }
+      if (found.value) return found.value.snapshot();
+    }
+    const listed = await projectService.list();
+    if (!listed.ok) {
+      console.error("Could not list MultiCodex projects", listed.error);
+      void vscode.window.showErrorMessage(`Could not load projects: ${listed.error.message}`);
+      return undefined;
+    }
+    return listed.value[0];
+  }
+
+  function refreshViews(): void {
+    tree.refresh();
+    projectTree.refresh();
+    void projectDetails.refreshAll();
+  }
 
   function reportRuntimeDisconnect(message: string): void {
     const affected = connectedTasks.size;
@@ -154,7 +224,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     tree,
+    projectTree,
     taskDetails,
+    projectDetails,
     { dispose: () => {
       coordinator?.stop();
       activityBridge?.stop();
@@ -162,7 +234,49 @@ export function activate(context: vscode.ExtensionContext): void {
       codex.stop();
     } },
     vscode.window.registerTreeDataProvider("amazingMultiCodex.tasks", tree),
+    vscode.window.registerTreeDataProvider("amazingMultiCodex.projects", projectTree),
+    vscode.commands.registerCommand("amazingMultiCodex.refreshProjects", async () => {
+      await ensureWorkspaceProjects();
+      projectTree.refresh();
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.addProject", async () => {
+      const selected = await vscode.window.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, canSelectMany: false, openLabel: "Add Git Project" });
+      const folder = selected?.[0];
+      if (!folder || folder.scheme !== "file") return;
+      if (!await isGitRepository(folder.fsPath)) {
+        void vscode.window.showErrorMessage("Choose the root folder of a local Git repository.");
+        return;
+      }
+      const settings = readSettings();
+      if (!settings.ok) { void vscode.window.showErrorMessage(settings.error.message); return; }
+      const name = pathBaseName(folder.fsPath);
+      const added = await projectService.ensure({ name, repositoryRoot: folder.fsPath, baseRef: settings.value.baseRef });
+      if (!added.ok) { void vscode.window.showErrorMessage(added.error.message); return; }
+      projectTree.refresh();
+      await projectDetails.show(added.value);
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.showProjectDetails", async (project?: ProjectProps) => {
+      await projectsReady;
+      if (!project) {
+        const listed = await projectService.list();
+        if (!listed.ok) { void vscode.window.showErrorMessage(listed.error.message); return; }
+        project = await vscode.window.showQuickPick(listed.value.map(item => ({ label: item.name, description: item.repositoryRoot, project: item })), { placeHolder: "Choose a project" }).then(item => item?.project);
+      }
+      if (project) await projectDetails.show(project);
+    }),
     vscode.commands.registerCommand("amazingMultiCodex.createTask", async () => {
+      await projectsReady;
+      const projects = await projectService.list();
+      if (!projects.ok) { void vscode.window.showErrorMessage(projects.error.message); return; }
+      if (projects.value.length === 0) {
+        void vscode.window.showErrorMessage("Add or open a Git project before creating a task.");
+        return;
+      }
+      const selectedProject = projects.value.length === 1 ? projects.value[0] : await vscode.window.showQuickPick(
+        projects.value.map(project => ({ label: project.name, description: project.repositoryRoot, project })),
+        { placeHolder: "Choose the project for this task" }
+      ).then(item => item?.project);
+      if (!selectedProject) return;
       const title = await vscode.window.showInputBox({
         prompt: "What should Codex work on?",
         placeHolder: "e.g. Add retry handling to the API client",
@@ -198,12 +312,14 @@ export function activate(context: vscode.ExtensionContext): void {
         { label: "Low", description: "Run after normal tasks", priority: "low" }
       ], { placeHolder: "Choose a scheduling priority" });
       if (!priority) return;
-      const created = await createTask.execute({ title, description, acceptanceCriteria, priority: priority.priority });
+      const created = await createTask.execute({ projectId: selectedProject.id, title, description, acceptanceCriteria, priority: priority.priority });
       if (!created.ok) {
         void vscode.window.showErrorMessage(created.error.message);
         return;
       }
-      tree.refresh();
+      refreshViews();
+      projectTree.refresh();
+      await projectDetails.refresh(selectedProject);
       const next = await vscode.window.showInformationMessage(
         `Created draft MultiCodex task: ${created.value.title}`,
         "Queue Task",
@@ -219,7 +335,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
     vscode.commands.registerCommand("amazingMultiCodex.refreshTasks", () => {
-      tree.refresh();
+      refreshViews();
     }),
     vscode.commands.registerCommand("amazingMultiCodex.editTask", async (task?: TaskProps) => {
       task = await selectTask(task, candidate => candidate.status === "draft", "Edit a draft task");
@@ -273,16 +389,19 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showErrorMessage(revised.error.message);
         return;
       }
-      tree.refresh();
+      refreshViews();
       await taskDetails.refresh(task.id);
       void vscode.window.showInformationMessage(`Updated MultiCodex draft: ${revised.value.title}`);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.showRuntimeStatus", async () => {
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      if (!workspaceFolder || workspaceFolder.uri.scheme !== "file") {
-        void vscode.window.showErrorMessage("Open a local Git workspace to check MultiCodex readiness.");
-        return;
-      }
+      await projectsReady;
+      const projects = await projectService.list();
+      if (!projects.ok || projects.value.length === 0) { void vscode.window.showErrorMessage(projects.ok ? "Add a Git project first." : projects.error.message); return; }
+      const project = projects.value.length === 1 ? projects.value[0] : await vscode.window.showQuickPick(
+        projects.value.map(item => ({ label: item.name, description: item.repositoryRoot, project: item })),
+        { placeHolder: "Choose a project to check" }
+      ).then(item => item?.project);
+      if (!project) return;
       const settings = readSettings();
       if (!settings.ok) {
         const action = await vscode.window.showErrorMessage(settings.error.message, "Open Settings");
@@ -296,9 +415,9 @@ export function activate(context: vscode.ExtensionContext): void {
         title: "Checking MultiCodex readiness",
         cancellable: false
       }, () => runtimePreflight.inspect({
-        cwd: workspaceFolder.uri.fsPath,
+        cwd: project.repositoryRoot,
         codexExecutable: settings.value.codexExecutable,
-        baseRef: settings.value.baseRef
+        baseRef: project.baseRef
       }));
       const health = codex.current()?.health() ?? { status: "disconnected" as const };
       const selected = await vscode.window.showQuickPick(checks.map(check => ({
@@ -330,7 +449,7 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       const queued = await lifecycle.transition(task.id, "queued", "user-retry");
-      tree.refresh();
+      refreshViews();
       if (!queued.ok) {
         void vscode.window.showErrorMessage(queued.error.message);
         return;
@@ -348,11 +467,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("amazingMultiCodex.startTask", async (task?: TaskProps) => {
       task = await selectTask(task, candidate => candidate.status === "queued", "Start a queued task");
       if (!task) return;
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      if (!workspaceFolder || workspaceFolder.uri.scheme !== "file") {
-        void vscode.window.showErrorMessage("Open a local Git workspace before starting a task.");
-        return;
-      }
+      const project = await resolveTaskProject(task);
+      if (!project) { void vscode.window.showErrorMessage("The task project is unavailable."); return; }
       const storage = context.storageUri;
       if (!storage || storage.scheme !== "file") {
         void vscode.window.showErrorMessage("MultiCodex storage is unavailable for this workspace.");
@@ -370,9 +486,9 @@ export function activate(context: vscode.ExtensionContext): void {
             void vscode.window.showErrorMessage(settings.error.message);
             return;
           }
-          await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(storage, "worktrees"));
+          await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(storage, "worktrees", project.id));
           const agent = await codex.start({
-            cwd: workspaceFolder.uri.fsPath,
+            cwd: project.repositoryRoot,
             executable: settings.value.codexExecutable,
             requestTimeoutMs: settings.value.requestTimeoutMs
           });
@@ -390,13 +506,13 @@ export function activate(context: vscode.ExtensionContext): void {
           connectedTasks.add(task.id);
           const started = await workflow.execute({
             taskId: task.id,
-            repositoryRoot: workspaceFolder.uri.fsPath,
-            worktreeRoot: vscode.Uri.joinPath(storage, "worktrees").fsPath,
-            baseRef: settings.value.baseRef,
+            repositoryRoot: project.repositoryRoot,
+            worktreeRoot: vscode.Uri.joinPath(storage, "worktrees", project.id).fsPath,
+            baseRef: project.baseRef,
             concurrencyLimit: settings.value.concurrencyLimit,
             model: settings.value.defaultModel
           });
-          tree.refresh();
+      refreshViews();
           if (!started.ok) {
             connectedTasks.delete(task.id);
             void vscode.window.showErrorMessage(started.error.message);
@@ -417,19 +533,16 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showInformationMessage(`'${task.title}' is already running in the connected Codex App Server.`);
         return;
       }
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      if (!workspaceFolder || workspaceFolder.uri.scheme !== "file") {
-        void vscode.window.showErrorMessage("Open the task's local Git workspace before resuming.");
-        return;
-      }
       try {
+        const project = await resolveTaskProject(task);
+        if (!project) { void vscode.window.showErrorMessage("The task project is unavailable."); return; }
         const settings = readSettings();
         if (!settings.ok) {
           void vscode.window.showErrorMessage(settings.error.message);
           return;
         }
         const agent = await codex.start({
-          cwd: workspaceFolder.uri.fsPath,
+          cwd: project.repositoryRoot,
           executable: settings.value.codexExecutable,
           requestTimeoutMs: settings.value.requestTimeoutMs
         });
@@ -532,7 +645,7 @@ export function activate(context: vscode.ExtensionContext): void {
         : agent
           ? await new CancelTaskWorkflow(lifecycle, agent, executions, clock).execute(task.id)
           : await new AbandonTaskWorkflow(lifecycle, executions, clock).execute(task.id);
-      tree.refresh();
+      refreshViews();
       if (!cancelled.ok) void vscode.window.showErrorMessage(cancelled.error.message);
       else {
         connectedTasks.delete(task.id);
@@ -584,7 +697,7 @@ export function activate(context: vscode.ExtensionContext): void {
           cancellation.dispose();
         }
       });
-      tree.refresh();
+      refreshViews();
       if (!result.ok) {
         void vscode.window.showErrorMessage(result.error.message);
         return;
@@ -630,11 +743,8 @@ export function activate(context: vscode.ExtensionContext): void {
       task = await selectTask(task, candidate => candidate.status === "readyForReview"
         || (candidate.status === "blocked" && !!candidate.statusReason?.startsWith("integration.")), "Integrate a reviewed task");
       if (!task) return;
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      if (!workspaceFolder || workspaceFolder.uri.scheme !== "file") {
-        void vscode.window.showErrorMessage("Open the target local Git workspace before integrating.");
-        return;
-      }
+      const project = await resolveTaskProject(task);
+      if (!project) { void vscode.window.showErrorMessage("The task project is unavailable."); return; }
       const execution = await executions.findLatestByTask(task.id);
       if (!execution.ok || !execution.value) {
         void vscode.window.showErrorMessage(execution.ok ? "No execution was found for this task." : execution.error.message);
@@ -671,12 +781,12 @@ export function activate(context: vscode.ExtensionContext): void {
         new GitIntegrationAdapter(commandRunner)
       ).execute({
         taskId: task.id,
-        targetRepositoryRoot: workspaceFolder.uri.fsPath,
+        targetRepositoryRoot: project.repositoryRoot,
         strategy: selection.strategy,
         commitMessage: `MultiCodex: ${task.title}`,
         reviewedPatch: changes.value.patch
       });
-      tree.refresh();
+      refreshViews();
       if (!integrated.ok) {
         void vscode.window.showErrorMessage(integrated.error.message);
         return;
@@ -708,7 +818,7 @@ export function activate(context: vscode.ExtensionContext): void {
         task.id,
         selection === "Mark Completed" ? "completed" : "retry"
       );
-      tree.refresh();
+      refreshViews();
       await taskDetails.refresh(task.id);
       if (!recovered.ok) {
         void vscode.window.showErrorMessage(recovered.error.message);
@@ -816,7 +926,7 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       connectedTasks.delete(task.id);
-      tree.refresh();
+      refreshViews();
       await taskDetails.refresh(task.id);
       void vscode.window.showInformationMessage(`Deleted MultiCodex task: ${task.title}`);
     })
@@ -824,7 +934,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   void new ReconcileExecutionsWorkflow(executions, lifecycle, gitWorkspaces, clock).execute()
     .then(report => {
-      tree.refresh();
+      refreshViews();
       if (!report.ok) {
         console.error("MultiCodex restart reconciliation failed", report.error);
         void vscode.window.showErrorMessage(`MultiCodex recovery failed: ${report.error.message}`);
@@ -841,25 +951,28 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   async function dispatchQueueOnce(notify: boolean): Promise<void> {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const storage = context.storageUri;
-    if (!workspaceFolder || workspaceFolder.uri.scheme !== "file" || !storage || storage.scheme !== "file") {
-      if (notify) void vscode.window.showErrorMessage("Open a local Git workspace before dispatching tasks.");
+    if (!storage || storage.scheme !== "file") {
+      if (notify) void vscode.window.showErrorMessage("MultiCodex workspace storage is unavailable.");
       return;
     }
     const connectionCandidates = new Set<TaskProps["id"]>();
     try {
+      await projectsReady;
       const listed = await repository.list();
       if (!listed.ok) throw listed.error;
-      if (!listed.value.some(task => task.snapshot().status === "queued")) {
+      const queued = listed.value.map(task => task.snapshot()).filter(task => task.status === "queued");
+      if (queued.length === 0) {
         if (notify) void vscode.window.showInformationMessage("No queued MultiCodex tasks are ready to dispatch.");
         return;
       }
+      const projects = await projectService.list();
+      if (!projects.ok) throw projects.error;
+      if (projects.value.length === 0) throw new Error("No MultiCodex project is registered.");
       const settings = readSettings();
       if (!settings.ok) throw settings.error;
-      await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(storage, "worktrees"));
       const agent = await codex.start({
-        cwd: workspaceFolder.uri.fsPath,
+        cwd: projects.value[0].repositoryRoot,
         executable: settings.value.codexExecutable,
         requestTimeoutMs: settings.value.requestTimeoutMs
       });
@@ -871,41 +984,53 @@ export function activate(context: vscode.ExtensionContext): void {
       const dispatched = await new DispatchQueuedTasksWorkflow(
         repository, executions, dependencies, new SchedulerPolicy(), starter
       );
-      for (const task of listed.value) {
-        if (task.snapshot().status === "queued") {
-          connectionCandidates.add(task.snapshot().id);
-          connectedTasks.add(task.snapshot().id);
+      const started: TaskProps["id"][] = [];
+      const failures: Array<{ taskId: TaskProps["id"]; error: { message: string } }> = [];
+      const groups = projects.value.map((project, index) => ({
+        project,
+        includeUnassigned: index === 0,
+        tasks: queued.filter(task => task.projectId === project.id || (index === 0 && task.projectId === undefined))
+      })).filter(group => group.tasks.length > 0);
+      for (const group of groups) {
+        await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(storage, "worktrees", group.project.id));
+        for (const task of group.tasks) {
+          connectionCandidates.add(task.id);
+          connectedTasks.add(task.id);
         }
+        const result = await dispatched.execute({
+          projectId: group.project.id,
+          includeUnassigned: group.includeUnassigned,
+          repositoryRoot: group.project.repositoryRoot,
+          worktreeRoot: vscode.Uri.joinPath(storage, "worktrees", group.project.id).fsPath,
+          baseRef: group.project.baseRef,
+          concurrencyLimit: settings.value.concurrencyLimit,
+          model: settings.value.defaultModel
+        });
+        if (!result.ok) throw result.error;
+        started.push(...result.value.started);
+        failures.push(...result.value.failures);
       }
-      const result = await dispatched.execute({
-        repositoryRoot: workspaceFolder.uri.fsPath,
-        worktreeRoot: vscode.Uri.joinPath(storage, "worktrees").fsPath,
-        baseRef: settings.value.baseRef,
-        concurrencyLimit: settings.value.concurrencyLimit,
-        model: settings.value.defaultModel
-      });
-      tree.refresh();
-      if (!result.ok) throw result.error;
-      const startedTaskIds = new Set(result.value.started);
+      refreshViews();
+      const startedTaskIds = new Set(started);
       for (const taskId of connectionCandidates) {
         if (!startedTaskIds.has(taskId)) connectedTasks.delete(taskId);
       }
-      const failed = result.value.failures.length;
+      const failed = failures.length;
       if (failed) {
         const titles = new Map(listed.value.map(item => {
           const snapshot = item.snapshot();
           return [snapshot.id, snapshot.title] as const;
         }));
-        const details = result.value.failures.slice(0, 3)
+        const details = failures.slice(0, 3)
           .map(failure => `${titles.get(failure.taskId) ?? failure.taskId}: ${failure.error.message}`)
           .join("; ");
         const remainder = failed > 3 ? `; and ${failed - 3} more` : "";
         await offerRuntimeCheck(
-          `Started ${result.value.started.length} queued task(s), but ${failed} failed: ${details}${remainder}`
+          `Started ${started.length} queued task(s), but ${failed} failed: ${details}${remainder}`
         );
       } else if (notify) {
-        void vscode.window.showInformationMessage(result.value.started.length > 0
-          ? `Started ${result.value.started.length} queued task(s).`
+        void vscode.window.showInformationMessage(started.length > 0
+          ? `Started ${started.length} queued task(s) across ${groups.length} project(s).`
           : "Queued tasks exist, but none are currently runnable. Check prerequisites and the concurrency limit.");
       }
     } catch (cause) {
@@ -935,7 +1060,7 @@ export function activate(context: vscode.ExtensionContext): void {
       error: (message, error) => console.error(message, error),
       taskChanged: taskId => {
         connectedTasks.delete(taskId);
-        tree.refresh();
+      refreshViews();
         void taskDetails.refresh(taskId);
         void dispatchQueue(false);
       }
@@ -983,7 +1108,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }, {
       error: (message, cause) => console.error(message, cause),
       taskChanged: taskId => {
-        tree.refresh();
+      refreshViews();
         void taskDetails.refresh(taskId);
       }
     });
