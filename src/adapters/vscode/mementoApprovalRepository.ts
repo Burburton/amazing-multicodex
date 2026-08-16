@@ -19,36 +19,64 @@ export class MementoApprovalRepository implements ApprovalRepository {
   constructor(private readonly state: KeyValueState) {}
 
   async findById(id: ApprovalId): Promise<Result<Approval | undefined>> {
-    const record = this.records().find(item => item.id === id);
+    const records = this.records();
+    if (!records.ok) return records;
+    const record = records.value.find(item => item.id === id);
     return ok(record ? Approval.restore(toProps(record)) : undefined);
   }
 
   async findPendingByTask(taskId: TaskId): Promise<Result<readonly Approval[]>> {
-    return ok(this.records()
+    const records = this.records();
+    if (!records.ok) return records;
+    return ok(records.value
       .filter(item => item.taskId === taskId && item.status === "pending")
       .map(item => Approval.restore(toProps(item))));
   }
 
   async save(approval: Approval, expectedVersion: number): Promise<Result<void>> {
     const records = this.records();
+    if (!records.ok) return records;
     const snapshot = approval.snapshot();
-    const index = records.findIndex(item => item.id === snapshot.id);
-    const actual = index === -1 ? -1 : records[index].version;
+    const index = records.value.findIndex(item => item.id === snapshot.id);
+    const actual = index === -1 ? -1 : records.value[index].version;
     if (actual !== expectedVersion) return err(conflict(snapshot.id, expectedVersion, actual));
     const stored = toStored(snapshot);
-    if (index === -1) records.unshift(stored);
-    else records[index] = stored;
+    if (index === -1) records.value.unshift(stored);
+    else records.value[index] = stored;
     try {
-      await this.state.update(STORAGE_KEY, records);
+      await this.state.update(STORAGE_KEY, records.value);
       return ok(undefined);
     } catch (cause) {
       return err({ code: "approval.persistence-failed", category: "unavailable", message: "Approval could not be persisted.", retryable: true, cause });
     }
   }
 
-  private records(): StoredApproval[] {
-    return [...this.state.get<StoredApproval[]>(STORAGE_KEY, [])];
+  private records(): Result<StoredApproval[]> {
+    try {
+      const stored = this.state.get<unknown>(STORAGE_KEY, []);
+      if (!Array.isArray(stored) || !stored.every(isStoredApproval)) return err(corruptState());
+      return ok([...stored]);
+    } catch (cause) {
+      return err({ code: "approval.persistence-failed", category: "unavailable", message: "Approval state could not be read.", retryable: true, cause });
+    }
   }
+}
+
+function isStoredApproval(value: unknown): value is StoredApproval {
+  if (!value || typeof value !== "object") return false;
+  const approval = value as Record<string, unknown>;
+  return typeof approval.id === "string" && typeof approval.taskId === "string"
+    && typeof approval.runtimeRequestId === "string" && typeof approval.runtimeMethod === "string"
+    && ["read", "write", "execute", "destructive", "external"].includes(String(approval.risk))
+    && typeof approval.title === "string"
+    && ["pending", "approved", "declined", "cancelled"].includes(String(approval.status))
+    && typeof approval.createdAt === "string" && !Number.isNaN(Date.parse(approval.createdAt))
+    && (approval.decidedAt === undefined || (typeof approval.decidedAt === "string" && !Number.isNaN(Date.parse(approval.decidedAt))))
+    && typeof approval.version === "number" && Number.isInteger(approval.version) && approval.version >= 0;
+}
+
+function corruptState(): AppError {
+  return { code: "approval.state-invalid", category: "internal", message: "Stored approval state is invalid.", retryable: false };
 }
 
 function toStored(props: ApprovalProps): StoredApproval {
@@ -70,4 +98,3 @@ function toProps(record: StoredApproval): ApprovalProps {
 function conflict(id: ApprovalId, expected: number, actual: number): AppError {
   return { code: "approval.version-conflict", category: "conflict", message: "Approval was changed by another operation.", retryable: true, context: { id, expected: String(expected), actual: String(actual) } };
 }
-
