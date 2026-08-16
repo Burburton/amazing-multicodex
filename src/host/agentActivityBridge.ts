@@ -36,13 +36,13 @@ export class AgentActivityBridge {
       return;
     }
     if (event.type !== "turnCompleted") return;
+    const message = this.messageBuffers.get(key);
+    this.messageBuffers.delete(key);
     const execution = await this.executions.findByAgent(event.threadId, event.turnId);
     if (!execution.ok || !execution.value) {
       this.diagnostics.error("Could not associate Codex activity with a task.", execution.ok ? undefined : execution.error);
       return;
     }
-    const message = this.messageBuffers.get(key);
-    this.messageBuffers.delete(key);
     if (message) {
       const recorded = await this.activity.record({
         taskId: execution.value.taskId,
@@ -60,4 +60,3 @@ export class AgentActivityBridge {
     if (!terminal.ok) this.diagnostics.error("Could not persist Codex terminal activity.", terminal.error);
   }
 }
-
