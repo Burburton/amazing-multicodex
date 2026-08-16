@@ -1,6 +1,12 @@
 import * as vscode from "vscode";
+import { CodexProcessSupervisor } from "./adapters/codex-app-server/codexProcessSupervisor";
+import { GitWorkspaceAdapter } from "./adapters/git-cli/gitWorkspaceAdapter";
+import { NodeCommandRunner } from "./adapters/process/nodeCommandRunner";
+import { NodeProcessFactory } from "./adapters/process/nodeProcessFactory";
 import { MementoTaskRepository } from "./adapters/vscode/mementoTaskRepository";
-import { CreateTaskHandler, TaskLifecycleService } from "./modules/tasks/public";
+import { InMemoryExecutionRepository } from "./modules/orchestration/adapters/inMemoryExecutionRepository";
+import { StartTaskWorkflow } from "./modules/orchestration/public";
+import { CreateTaskHandler, TaskLifecycleService, TaskProps } from "./modules/tasks/public";
 import { SystemClock } from "./shared/core/clock";
 import { CryptoIdGenerator } from "./shared/core/idGenerator";
 import { TaskTreeProvider } from "./ui/taskTreeProvider";
@@ -11,9 +17,18 @@ export function activate(context: vscode.ExtensionContext): void {
   const createTask = new CreateTaskHandler(repository, clock, new CryptoIdGenerator());
   const lifecycle = new TaskLifecycleService(repository, clock);
   const tree = new TaskTreeProvider(repository);
+  const ids = new CryptoIdGenerator();
+  const codex = new CodexProcessSupervisor(new NodeProcessFactory(), {
+    malformedProtocolLine: line => console.warn("MultiCodex ignored malformed Codex output", line),
+    stderr: chunk => console.warn("Codex App Server:", chunk.trimEnd()),
+    exited: exit => console.info("Codex App Server exited", exit),
+    processError: error => console.error("Codex App Server error", error)
+  });
+  const executions = new InMemoryExecutionRepository();
 
   context.subscriptions.push(
     tree,
+    { dispose: () => codex.stop() },
     vscode.window.registerTreeDataProvider("amazingMultiCodex.tasks", tree),
     vscode.commands.registerCommand("amazingMultiCodex.createTask", async () => {
       const title = await vscode.window.showInputBox({
@@ -41,6 +56,56 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand("amazingMultiCodex.refreshTasks", () => {
       tree.refresh();
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.startTask", async (task?: TaskProps) => {
+      if (!task) {
+        void vscode.window.showErrorMessage("Select a queued MultiCodex task to start.");
+        return;
+      }
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder || workspaceFolder.uri.scheme !== "file") {
+        void vscode.window.showErrorMessage("Open a local Git workspace before starting a task.");
+        return;
+      }
+      const storage = context.storageUri;
+      if (!storage || storage.scheme !== "file") {
+        void vscode.window.showErrorMessage("MultiCodex storage is unavailable for this workspace.");
+        return;
+      }
+
+      await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Starting MultiCodex task: ${task.title}`,
+        cancellable: false
+      }, async () => {
+        try {
+          await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(storage, "worktrees"));
+          const agent = await codex.start({ cwd: workspaceFolder.uri.fsPath });
+          const workflow = new StartTaskWorkflow(
+            lifecycle,
+            new GitWorkspaceAdapter(new NodeCommandRunner()),
+            agent,
+            executions,
+            clock,
+            ids
+          );
+          const started = await workflow.execute({
+            taskId: task.id,
+            repositoryRoot: workspaceFolder.uri.fsPath,
+            worktreeRoot: vscode.Uri.joinPath(storage, "worktrees").fsPath,
+            baseRef: "HEAD"
+          });
+          tree.refresh();
+          if (!started.ok) {
+            void vscode.window.showErrorMessage(started.error.message);
+            return;
+          }
+          void vscode.window.showInformationMessage(`Started MultiCodex task: ${task.title}`);
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : "Unknown startup error.";
+          void vscode.window.showErrorMessage(`Could not start MultiCodex task: ${message}`);
+        }
+      });
     })
   );
 }
