@@ -28,10 +28,13 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskProps> {
   async getChildren(): Promise<TaskProps[]> {
     const tasks = await this.repository.list();
     if (!tasks.ok) {
+      await vscode.commands.executeCommand("setContext", "amazingMultiCodex.hasTasks", false);
       this.diagnostics.error(tasks.error.message, tasks.error);
       return [];
     }
-    return tasks.value.map(task => task.snapshot());
+    const snapshots = tasks.value.map(task => task.snapshot());
+    await vscode.commands.executeCommand("setContext", "amazingMultiCodex.hasTasks", snapshots.length > 0);
+    return snapshots;
   }
 
   refresh(): void {

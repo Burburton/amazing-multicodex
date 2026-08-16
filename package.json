@@ -129,6 +129,13 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "amazingMultiCodex.tasks",
+        "contents": "Coordinate isolated Codex tasks in this Git workspace.\n[Create your first task](command:amazingMultiCodex.createTask)\n[Check runtime status](command:amazingMultiCodex.showRuntimeStatus)\n[Configure MultiCodex](command:workbench.action.openSettings?%5B%22%40ext%3Aamazing-multicodex.amazing-multicodex%22%5D)",
+        "when": "amazingMultiCodex.hasTasks == false"
+      }
+    ],
     "commands": [
       {
         "command": "amazingMultiCodex.createTask",

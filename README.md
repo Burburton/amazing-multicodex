@@ -62,3 +62,39 @@ npm run package
 ```
 
 Press `F5` in VS Code to launch an Extension Development Host.
+
+## Install and use
+
+Requirements:
+
+- VS Code 1.90 or newer;
+- Git and a local Git repository opened as the first workspace folder;
+- a configured Codex CLI whose `codex app-server` command can start locally.
+
+Build and install the extension:
+
+```powershell
+npm install
+npm run package
+code --install-extension ./amazing-multicodex-0.1.0.vsix
+```
+
+Reload VS Code, open Explorer, and find the `MultiCodex Tasks` view. Its empty
+state links directly to task creation, runtime status, and extension settings.
+
+The normal task flow is:
+
+1. Create a draft with a title, context, acceptance criteria, and priority.
+2. Optionally add prerequisites while the task is still a draft.
+3. Queue the task. Ready tasks dispatch automatically up to the configured
+   concurrency limit.
+4. Open task details to follow execution and activity. Command and file-change
+   approval requests appear as modal VS Code prompts.
+5. Run validation, inspect the complete worktree diff, and integrate it with a
+   merge or squash after review.
+6. Release the isolated worktree after the task is completed or cancelled.
+
+Search VS Code Settings for `Amazing MultiCodex` to configure the Codex
+executable, default model, base ref, concurrency limit, timeouts, and ordered
+validation commands. Commit or stash unrelated local changes before integrating
+a completed task; integration intentionally requires a clean target repository.
