@@ -10,6 +10,7 @@ test("normalizes valid settings over defaults", () => {
   assert.equal(result.value.concurrencyLimit, 4);
   assert.equal(result.value.defaultModel, "gpt-5.6");
   assert.equal(result.value.baseRef, "HEAD");
+  assert.equal(result.value.validationTimeoutMs, 900_000);
 });
 
 test("treats an empty model override as Codex default selection", () => {
@@ -22,4 +23,10 @@ test("rejects unsafe resource limits", () => {
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.equal(result.error.code, "settings.concurrency-limit");
+});
+
+test("rejects validation timeouts outside the safe range", () => {
+  const result = parseSettings({ validationTimeoutMs: 3_600_001 });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "settings.validation-timeout");
 });

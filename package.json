@@ -75,6 +75,13 @@
           "maximum": 200000,
           "description": "Maximum number of characters retained for one streamed agent message."
         },
+        "amazingMultiCodex.validationTimeoutMs": {
+          "type": "integer",
+          "default": 900000,
+          "minimum": 1000,
+          "maximum": 3600000,
+          "description": "Timeout applied to each validation command in milliseconds."
+        },
         "amazingMultiCodex.validationCommands": {
           "type": "array",
           "default": [

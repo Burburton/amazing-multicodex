@@ -352,7 +352,8 @@ export function activate(context: vscode.ExtensionContext): void {
             id: `configured-${index + 1}` as ValidationCheckId,
             label: command.label,
             executable: command.executable,
-            args: command.args
+            args: command.args,
+            timeoutMs: settings.value.validationTimeoutMs
           }))
         }
       }));
@@ -660,6 +661,7 @@ export function activate(context: vscode.ExtensionContext): void {
       baseRef: config.get<string>("baseRef"),
       concurrencyLimit: config.get<number>("concurrencyLimit"),
       maxActivityCharacters: config.get<number>("maxActivityCharacters"),
+      validationTimeoutMs: config.get<number>("validationTimeoutMs"),
       validationCommands: config.get<ValidationCommandSetting[]>("validationCommands")
     });
   }

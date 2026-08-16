@@ -7,6 +7,7 @@ export interface MultiCodexSettings {
   readonly baseRef: string;
   readonly concurrencyLimit: number;
   readonly maxActivityCharacters: number;
+  readonly validationTimeoutMs: number;
   readonly validationCommands: readonly ValidationCommandSetting[];
 }
 
@@ -24,6 +25,7 @@ export const defaultSettings: MultiCodexSettings = {
   baseRef: "HEAD",
   concurrencyLimit: 2,
   maxActivityCharacters: 32_000,
+  validationTimeoutMs: 900_000,
   validationCommands: [
     { label: "Git whitespace check", executable: "git", args: ["diff", "--check"] }
   ]
@@ -37,6 +39,7 @@ export function parseSettings(input: SettingsInput): Result<MultiCodexSettings> 
     baseRef: input.baseRef ?? defaultSettings.baseRef,
     concurrencyLimit: input.concurrencyLimit ?? defaultSettings.concurrencyLimit,
     maxActivityCharacters: input.maxActivityCharacters ?? defaultSettings.maxActivityCharacters,
+    validationTimeoutMs: input.validationTimeoutMs ?? defaultSettings.validationTimeoutMs,
     validationCommands: input.validationCommands ?? defaultSettings.validationCommands
   };
   if (!value.codexExecutable.trim()) return err(settingError("settings.codex-executable", "Codex executable cannot be empty."));
@@ -49,6 +52,9 @@ export function parseSettings(input: SettingsInput): Result<MultiCodexSettings> 
   }
   if (!Number.isInteger(value.maxActivityCharacters) || value.maxActivityCharacters < 1_000 || value.maxActivityCharacters > 200_000) {
     return err(settingError("settings.activity-limit", "Activity message limit must be between 1,000 and 200,000 characters."));
+  }
+  if (!Number.isInteger(value.validationTimeoutMs) || value.validationTimeoutMs < 1_000 || value.validationTimeoutMs > 3_600_000) {
+    return err(settingError("settings.validation-timeout", "Validation timeout must be between 1,000 and 3,600,000 ms."));
   }
   if (value.validationCommands.length === 0 || value.validationCommands.some(command =>
     !command.label.trim() || !command.executable.trim() || !Array.isArray(command.args)
