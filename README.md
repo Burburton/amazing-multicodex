@@ -38,7 +38,7 @@ Task board → scheduler → Codex session adapter → isolated worktree
 
 Next milestones:
 
-1. Connect the queue dispatcher to automatic host lifecycle triggers.
+1. Add automatic queue dispatch after task completion and capacity changes.
 2. Replace quick-pick activity with a task-detail webview.
 3. Add SQLite migrations and full restart reconciliation.
 4. Add conflict-resolution and safe worktree cleanup workflows.

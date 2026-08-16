@@ -19,6 +19,7 @@
   "activationEvents": [
     "onView:amazingMultiCodex.tasks",
     "onCommand:amazingMultiCodex.createTask",
+    "onCommand:amazingMultiCodex.dispatchQueue",
     "onCommand:amazingMultiCodex.startTask",
     "onCommand:amazingMultiCodex.resumeTask",
     "onCommand:amazingMultiCodex.showActivity",
@@ -105,6 +106,11 @@
         "title": "MultiCodex: Refresh Tasks"
       },
       {
+        "command": "amazingMultiCodex.dispatchQueue",
+        "title": "MultiCodex: Dispatch Queue",
+        "icon": "$(run-all)"
+      },
+      {
         "command": "amazingMultiCodex.startTask",
         "title": "MultiCodex: Start Task",
         "icon": "$(play)"
@@ -154,6 +160,11 @@
         },
         {
           "command": "amazingMultiCodex.refreshTasks",
+          "when": "view == amazingMultiCodex.tasks",
+          "group": "navigation"
+        },
+        {
+          "command": "amazingMultiCodex.dispatchQueue",
           "when": "view == amazingMultiCodex.tasks",
           "group": "navigation"
         }
