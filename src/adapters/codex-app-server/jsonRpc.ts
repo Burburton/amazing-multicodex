@@ -1,4 +1,5 @@
 import { AppError } from "../../shared/core/result";
+import { redactAndTruncateSensitiveText } from "../../shared/core/sensitiveData";
 
 export type JsonRpcId = number | string;
 
@@ -195,5 +196,12 @@ function peerError(
   context?: Record<string, string>,
   cause?: unknown
 ): AppError {
-  return { code, category: "unavailable", message, retryable, context, cause };
+  return {
+    code,
+    category: "unavailable",
+    message: redactAndTruncateSensitiveText(message, 2_000),
+    retryable,
+    context,
+    cause
+  };
 }

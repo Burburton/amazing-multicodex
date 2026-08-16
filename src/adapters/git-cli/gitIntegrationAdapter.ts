@@ -1,4 +1,5 @@
 import { AppError, Result, err, ok } from "../../shared/core/result";
+import { redactAndTruncateSensitiveText } from "../../shared/core/sensitiveData";
 import path from "node:path";
 import { CommandResult, CommandRunnerPort } from "../../shared/ports/commandRunner";
 import {
@@ -122,7 +123,13 @@ export class GitIntegrationAdapter implements IntegrationPort {
 }
 
 function integrationError(code: string, message: string, retryable = false, cause?: unknown): AppError {
-  return { code, category: code === "git.unavailable" ? "unavailable" : "conflict", message, retryable, cause };
+  return {
+    code,
+    category: code === "git.unavailable" ? "unavailable" : "conflict",
+    message: redactAndTruncateSensitiveText(message, 2_000),
+    retryable,
+    cause
+  };
 }
 
 function canonicalPatch(patch: string): string {

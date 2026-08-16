@@ -1,5 +1,6 @@
 import * as path from "node:path";
 import { AppError, Result, err, ok } from "../../shared/core/result";
+import { redactAndTruncateSensitiveText } from "../../shared/core/sensitiveData";
 import { CommandResult, CommandRunnerPort } from "../../shared/ports/commandRunner";
 import {
   ChangeSet,
@@ -128,5 +129,11 @@ function ensureDescendant(root: string, candidate: string): Result<void> {
 }
 
 function gitError(code: string, message: string, retryable = false, cause?: unknown): AppError {
-  return { code, category: code === "workspace.dirty" ? "conflict" : "unavailable", message, retryable, cause };
+  return {
+    code,
+    category: code === "workspace.dirty" ? "conflict" : "unavailable",
+    message: redactAndTruncateSensitiveText(message, 2_000),
+    retryable,
+    cause
+  };
 }

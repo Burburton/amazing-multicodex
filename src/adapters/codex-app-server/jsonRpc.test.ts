@@ -30,6 +30,22 @@ test("maps protocol failures to typed errors", async () => {
   });
 });
 
+test("redacts and bounds protocol error messages", async () => {
+  const transport = new RecordingTransport();
+  const peer = new JsonRpcPeer(transport);
+  const response = peer.request("demo");
+  const request = transport.messages[0];
+  assert.ok("id" in request);
+  peer.receive({
+    id: request.id,
+    error: { code: -32000, message: `Authorization: Bearer secret-token ${"x".repeat(3_000)}` }
+  });
+  await assert.rejects(response, error => {
+    const message = (error as { message: string }).message;
+    return message.length === 2_000 && !message.includes("secret-token") && message.includes("truncated");
+  });
+});
+
 test("dispatches notifications and supports unsubscription", () => {
   const transport = new RecordingTransport();
   const peer = new JsonRpcPeer(transport);

@@ -40,6 +40,20 @@ test("runtime preflight isolates command failures", async () => {
   assert.ok(checks.every(check => !check.ok));
 });
 
+test("redacts secrets from readiness diagnostics", async () => {
+  const runner = new StubRunner(() => ({
+    exitCode: 1,
+    signal: null,
+    stdout: "",
+    stderr: "Authorization: Bearer secret-token-value",
+    truncated: false
+  }));
+  const checks = await new RuntimePreflight(runner).inspect({
+    cwd: "/repo", codexExecutable: "codex", baseRef: "HEAD"
+  });
+  assert.equal(checks.every(check => !check.detail.includes("secret-token-value")), true);
+});
+
 class StubRunner implements CommandRunnerPort {
   readonly specs: CommandSpec[] = [];
 
