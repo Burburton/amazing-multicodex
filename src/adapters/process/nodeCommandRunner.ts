@@ -14,6 +14,7 @@ export class NodeCommandRunner implements CommandRunnerPort {
       let stdout: Buffer = Buffer.alloc(0);
       let stderr: Buffer = Buffer.alloc(0);
       let truncated = false;
+      let forceKillTimer: NodeJS.Timeout | undefined;
 
       const append = (current: Buffer, chunk: Buffer): Buffer => {
         const remaining = Math.max(0, limit - current.byteLength);
@@ -23,18 +24,28 @@ export class NodeCommandRunner implements CommandRunnerPort {
       child.stdout.on("data", chunk => { stdout = append(stdout, Buffer.from(chunk)); });
       child.stderr.on("data", chunk => { stderr = append(stderr, Buffer.from(chunk)); });
       child.once("error", reject);
-      child.once("exit", (exitCode, exitSignal) => resolve({
-        exitCode,
-        signal: exitSignal,
-        stdout: stdout.toString("utf8"),
-        stderr: stderr.toString("utf8"),
-        truncated
-      }));
+      child.once("close", (exitCode, exitSignal) => {
+        if (forceKillTimer) clearTimeout(forceKillTimer);
+        resolve({
+          exitCode,
+          signal: exitSignal,
+          stdout: stdout.toString("utf8"),
+          stderr: stderr.toString("utf8"),
+          truncated
+        });
+      });
 
-      const abort = () => child.kill();
+      const abort = () => {
+        if (child.exitCode !== null || child.signalCode !== null) return;
+        child.kill();
+        forceKillTimer = setTimeout(() => {
+          if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+        }, 1_000);
+        forceKillTimer.unref();
+      };
       if (signal?.aborted) abort();
       else signal?.addEventListener("abort", abort, { once: true });
-      child.once("exit", () => signal?.removeEventListener("abort", abort));
+      child.once("close", () => signal?.removeEventListener("abort", abort));
     });
   }
 }
