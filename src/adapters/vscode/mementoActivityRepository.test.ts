@@ -64,3 +64,14 @@ test("evicts oldest activity when the total character budget is exceeded", async
   assert.equal(records.ok, true);
   if (records.ok) assert.deepEqual(records.value.map(record => record.summary), ["third", "second"]);
 });
+
+test("returns no activity when the requested limit is zero", async () => {
+  const repository = new MementoActivityRepository(new FakeState());
+  await repository.append({
+    id: "record" as ActivityId, taskId: "task-1" as TaskId, kind: "lifecycle",
+    summary: "record", occurredAt: new Date("2026-08-15T12:00:00Z")
+  });
+  const records = await repository.listByTask("task-1" as TaskId, 0);
+  assert.equal(records.ok, true);
+  if (records.ok) assert.deepEqual(records.value, []);
+});

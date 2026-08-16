@@ -46,6 +46,7 @@ export class MementoActivityRepository implements ActivityRepository {
 
   async listByTask(taskId: TaskId, limit = 100): Promise<Result<readonly ActivityRecord[]>> {
     const bounded = Math.max(0, Math.min(limit, 500));
+    if (bounded === 0) return ok([]);
     const records = this.records();
     if (!records.ok) return records;
     return ok(records.value
