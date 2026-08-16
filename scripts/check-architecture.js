@@ -16,6 +16,7 @@ for (const file of sourceFiles(sourceRoot)) {
     checkDomainIsolation(relative, specifier);
     checkAdapterDirection(relative, specifier);
     checkCrossModuleBoundary(file, relative, specifier);
+    checkExternalModuleBoundary(file, relative, specifier);
   }
 }
 
@@ -59,7 +60,16 @@ function checkCrossModuleBoundary(file, relative, specifier) {
   }
 }
 
+function checkExternalModuleBoundary(file, relative, specifier) {
+  if (relative.startsWith("src/modules/") || !specifier.startsWith(".")) return;
+  const resolved = unix(path.relative(projectRoot, path.resolve(path.dirname(file), specifier)));
+  const target = resolved.match(/^src\/modules\/([^/]+)\/(.+)$/);
+  if (!target) return;
+  if (target[2] !== "public" && target[2] !== "public.ts") {
+    violations.push(`${relative}: module import '${specifier}' must target ${target[1]}/public`);
+  }
+}
+
 function unix(value) {
   return value.split(path.sep).join("/");
 }
-
