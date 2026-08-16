@@ -184,3 +184,20 @@ test("does not normalize meaningful trailing whitespace in reviewed patches", as
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.error.code, "integration.review-stale");
 });
+
+test("restores the source index when staged diff inspection fails", async () => {
+  const commands = new Commands();
+  const failed = { ...success("", 1), stderr: "cannot inspect" };
+  commands.results.push(success(), success("original-index\n"), success(), failed, success());
+  const result = await new GitIntegrationAdapter(commands).integrate({
+    workspace: {
+      id: "workspace" as WorkspaceId, taskId: "task" as TaskId,
+      repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/task",
+      branch: "multicodex/task", baseRef: "base"
+    },
+    targetRepositoryRoot: "/repo", strategy: "merge", commitMessage: "Integrate task", reviewedPatch: "patch"
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "integration.git-failed");
+  assert.deepEqual(commands.calls.at(-1)?.args, ["read-tree", "original-index"]);
+});

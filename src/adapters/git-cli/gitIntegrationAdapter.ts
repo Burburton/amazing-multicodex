@@ -26,25 +26,23 @@ export class GitIntegrationAdapter implements IntegrationPort {
     if (!originalIndex.ok) return originalIndex;
     const originalIndexTree = originalIndex.value.stdout.trim();
     const added = await this.git(input.workspace.path, ["add", "-A"]);
-    if (!added.ok) return added;
+    if (!added.ok) return this.restoreSourceIndex(input.workspace.path, originalIndexTree, added.error);
     const currentPatch = await this.git(input.workspace.path, [
       "diff", "--cached", "--binary", "--no-ext-diff", input.workspace.baseRef
     ]);
-    if (!currentPatch.ok) return currentPatch;
+    if (!currentPatch.ok) return this.restoreSourceIndex(input.workspace.path, originalIndexTree, currentPatch.error);
     if (canonicalPatch(currentPatch.value.stdout) !== canonicalPatch(input.reviewedPatch)) {
-      const restored = await this.git(input.workspace.path, ["read-tree", originalIndexTree]);
-      if (!restored.ok) return restored;
-      return err(integrationError(
+      return this.restoreSourceIndex(input.workspace.path, originalIndexTree, integrationError(
         "integration.review-stale",
         "Task changes no longer match the reviewed diff. Review the latest changes before integrating.",
         true
       ));
     }
     const staged = await this.git(input.workspace.path, ["diff", "--cached", "--quiet"], [0, 1]);
-    if (!staged.ok) return staged;
+    if (!staged.ok) return this.restoreSourceIndex(input.workspace.path, originalIndexTree, staged.error);
     if (staged.value.exitCode === 1) {
       const committed = await this.git(input.workspace.path, ["commit", "-m", input.commitMessage]);
-      if (!committed.ok) return committed;
+      if (!committed.ok) return this.restoreSourceIndex(input.workspace.path, originalIndexTree, committed.error);
     }
     const source = await this.git(input.workspace.path, ["rev-parse", "HEAD"]);
     if (!source.ok) return source;
@@ -80,6 +78,17 @@ export class GitIntegrationAdapter implements IntegrationPort {
       "Integration failed and the target repository could not be restored automatically.",
       false,
       { integrationFailure, rollbackFailure: restored.error }
+    ));
+  }
+
+  private async restoreSourceIndex<T>(workspacePath: string, tree: string, failure: AppError): Promise<Result<T>> {
+    const restored = await this.git(workspacePath, ["read-tree", tree]);
+    if (restored.ok) return err(failure);
+    return err(integrationError(
+      "integration.source-index-restore-failed",
+      "Integration stopped and the task workspace index could not be restored automatically.",
+      false,
+      { failure, restoreFailure: restored.error }
     ));
   }
 
