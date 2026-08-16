@@ -8,14 +8,24 @@ dependency rules, runtime design, and delivery slices.
 
 ## Current status
 
-This repository starts with the control-plane foundation:
+The extension currently provides an early single-task execution loop:
 
-- a persistent task model;
-- a `MultiCodex Tasks` Explorer view;
-- task creation from the Command Palette or view title bar;
-- explicit task lifecycle states ready for agent execution.
+- persistent tasks, execution associations, approvals, and bounded activity;
+- a `MultiCodex Tasks` Explorer view with create, start, resume, cancel, and
+  activity commands;
+- one isolated Git worktree and branch per task execution;
+- a supervised local Codex App Server connection over JSONL/stdio;
+- streamed turn completion, agent response capture, and task-state recovery;
+- modal command and file-change approvals with durable decisions;
+- configurable sequential validation gates with persisted task transitions;
+- complete worktree diff review, including committed and untracked changes;
+- explicit merge or squash integration into a clean target repository;
+- automated module-boundary checks, unit/contract tests, and VSIX packaging.
 
-Codex execution is intentionally not duplicated here. The next integration boundary is a Codex App Server adapter, so Codex remains responsible for reasoning and code changes while this extension handles task coordination, worktrees, approvals, and observability.
+Codex remains responsible for reasoning and code changes. This extension owns
+coordination, worktrees, approvals, persistence, and observability. Execution
+state currently uses VS Code workspace storage behind repository ports; the
+planned SQLite adapter can replace it without changing the domain modules.
 
 ## Direction
 
@@ -25,20 +35,21 @@ Task board → scheduler → Codex session adapter → isolated worktree
              tests / review / approval
 ```
 
-Planned milestones:
+Next milestones:
 
-1. Connect queued tasks to Codex App Server sessions.
-2. Add agent roles and task dependencies.
-3. Create isolated Git worktrees per task.
-4. Stream progress, approvals, and tool events into the task view.
-5. Add test gates and human-approved merge flows.
+1. Persist dependency graphs and add automatic queue scheduling.
+2. Replace quick-pick activity with a task-detail webview.
+3. Add SQLite migrations and full restart reconciliation.
+4. Add conflict-resolution and safe worktree cleanup workflows.
+5. Add protocol-generation compatibility checks across supported Codex versions.
 
 ## Development
 
 ```powershell
 npm install
 npm run check
-npm run compile
+npm test
+npm run package
 ```
 
 Press `F5` in VS Code to launch an Extension Development Host.
