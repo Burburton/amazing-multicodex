@@ -37,6 +37,23 @@ test("commits pending task changes and merges only into a clean target", async (
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.value.targetCommit, "target");
-  assert.deepEqual(commands.calls[5].args, ["merge", "--no-ff", "multicodex/task", "-m", "Integrate task"]);
+  assert.deepEqual(commands.calls[5].args, ["merge", "--no-ff", "source", "-m", "Integrate task"]);
 });
 
+test("squashes the resolved source commit rather than the mutable branch name", async () => {
+  const commands = new Commands();
+  commands.results.push(
+    success(), success(), success("", 0), success("source-sha\n"), success(), success(), success("target-sha\n")
+  );
+  const result = await new GitIntegrationAdapter(commands).integrate({
+    workspace: {
+      id: "workspace" as WorkspaceId, taskId: "task" as TaskId,
+      repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/task",
+      branch: "multicodex/task", baseRef: "base"
+    },
+    targetRepositoryRoot: "/repo", strategy: "squash", commitMessage: "Integrate task"
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(commands.calls[4].args, ["merge", "--squash", "source-sha"]);
+});

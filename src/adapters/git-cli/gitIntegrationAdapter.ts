@@ -25,13 +25,14 @@ export class GitIntegrationAdapter implements IntegrationPort {
     }
     const source = await this.git(input.workspace.path, ["rev-parse", "HEAD"]);
     if (!source.ok) return source;
+    const sourceCommit = source.value.stdout.trim();
     if (input.strategy === "merge") {
       const merged = await this.git(input.targetRepositoryRoot, [
-        "merge", "--no-ff", input.workspace.branch, "-m", input.commitMessage
+        "merge", "--no-ff", sourceCommit, "-m", input.commitMessage
       ]);
       if (!merged.ok) return merged;
     } else {
-      const squashed = await this.git(input.targetRepositoryRoot, ["merge", "--squash", input.workspace.branch]);
+      const squashed = await this.git(input.targetRepositoryRoot, ["merge", "--squash", sourceCommit]);
       if (!squashed.ok) return squashed;
       const committed = await this.git(input.targetRepositoryRoot, ["commit", "-m", input.commitMessage]);
       if (!committed.ok) return committed;
@@ -39,7 +40,7 @@ export class GitIntegrationAdapter implements IntegrationPort {
     const target = await this.git(input.targetRepositoryRoot, ["rev-parse", "HEAD"]);
     if (!target.ok) return target;
     return ok({
-      sourceCommit: source.value.stdout.trim(),
+      sourceCommit,
       targetCommit: target.value.stdout.trim(),
       strategy: input.strategy
     });
@@ -71,4 +72,3 @@ export class GitIntegrationAdapter implements IntegrationPort {
 function integrationError(code: string, message: string, retryable = false, cause?: unknown): AppError {
   return { code, category: code === "git.unavailable" ? "unavailable" : "conflict", message, retryable, cause };
 }
-
