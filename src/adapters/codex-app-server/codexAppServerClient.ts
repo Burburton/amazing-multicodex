@@ -13,6 +13,7 @@ import {
   StartExecutionInput
 } from "../../modules/agents/public";
 import { JsonRpcPeer } from "./jsonRpc";
+import { AppError } from "../../shared/core/result";
 
 interface InitializeResult {
   readonly userAgent?: string;
@@ -55,13 +56,14 @@ export class CodexAppServerClient implements AgentRuntimePort {
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    const result = await this.peer.request<InitializeResult>("initialize", {
+    const raw = await this.peer.request<unknown>("initialize", {
       clientInfo: {
         name: "amazing_multicodex",
         title: "Amazing MultiCodex",
         version: "0.1.0"
       }
     });
+    const result = initializeResult(raw);
     this.peer.notify("initialized", {});
     this.initialized = true;
     this.runtimeHealth = { status: "ready", userAgent: result.userAgent };
@@ -69,16 +71,16 @@ export class CodexAppServerClient implements AgentRuntimePort {
 
   async start(input: StartExecutionInput): Promise<AgentExecutionRef> {
     this.requireInitialized();
-    const threadResult = await this.peer.request<ThreadResult>("thread/start", {
+    const threadResult = threadResultOf(await this.peer.request<unknown>("thread/start", {
       model: input.model,
       cwd: input.cwd
-    });
+    }));
     return this.startTurn(threadResult.thread.id as AgentThreadId, input.prompt, input.cwd);
   }
 
   async resume(input: ResumeExecutionInput): Promise<AgentExecutionRef> {
     this.requireInitialized();
-    await this.peer.request<ThreadResult>("thread/resume", { threadId: input.threadId });
+    threadResultOf(await this.peer.request<unknown>("thread/resume", { threadId: input.threadId }));
     return this.startTurn(input.threadId, input.prompt, input.cwd);
   }
 
@@ -125,11 +127,11 @@ export class CodexAppServerClient implements AgentRuntimePort {
     prompt: string,
     cwd: string
   ): Promise<AgentExecutionRef> {
-    const result = await this.peer.request<TurnResult>("turn/start", {
+    const result = turnResultOf(await this.peer.request<unknown>("turn/start", {
       threadId,
       input: [{ type: "text", text: prompt }],
       cwd
-    });
+    }));
     return {
       executionId: `${threadId}:${result.turn.id}:${++this.executionSequence}` as ExecutionId,
       threadId,
@@ -218,6 +220,43 @@ export class CodexAppServerClient implements AgentRuntimePort {
 
 function envelope(value: unknown): NotificationEnvelope {
   return value && typeof value === "object" ? value as NotificationEnvelope : {};
+}
+
+function initializeResult(value: unknown): InitializeResult {
+  if (!value || typeof value !== "object") throw invalidResponse("initialize");
+  const userAgent = (value as Record<string, unknown>).userAgent;
+  if (userAgent !== undefined && typeof userAgent !== "string") throw invalidResponse("initialize");
+  return { userAgent };
+}
+
+function threadResultOf(value: unknown): ThreadResult {
+  const id = nestedId(value, "thread");
+  if (!id) throw invalidResponse("thread");
+  return { thread: { id } };
+}
+
+function turnResultOf(value: unknown): TurnResult {
+  const id = nestedId(value, "turn");
+  if (!id) throw invalidResponse("turn");
+  return { turn: { id } };
+}
+
+function nestedId(value: unknown, key: string): string | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const nested = (value as Record<string, unknown>)[key];
+  if (!nested || typeof nested !== "object") return undefined;
+  const id = (nested as Record<string, unknown>).id;
+  return typeof id === "string" && id.length > 0 ? id : undefined;
+}
+
+function invalidResponse(method: string): AppError {
+  return {
+    code: "codex.invalid-response",
+    category: "unavailable",
+    message: `Codex returned an invalid ${method} response.`,
+    retryable: true,
+    context: { method }
+  };
 }
 
 function stringValue(value: unknown): string | undefined {

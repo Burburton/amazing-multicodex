@@ -94,3 +94,10 @@ test("bridges server approval requests to the registered handler", async () => {
   assert.deepEqual(transport.messages.at(-1), { id: 77, result: { decision: "accept" } });
 });
 
+test("rejects malformed thread responses with a typed protocol error", async () => {
+  const { client, peer, transport } = await initializedClient();
+  const started = client.start({ prompt: "Implement it", cwd: "/repo" });
+  const request = latestRequest(transport);
+  peer.receive({ id: request.id, result: { thread: {} } });
+  await assert.rejects(started, error => (error as { code?: string }).code === "codex.invalid-response");
+});
