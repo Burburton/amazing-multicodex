@@ -11,6 +11,7 @@ import { MementoTaskRepository } from "./adapters/vscode/mementoTaskRepository";
 import { MementoTaskDependencyRepository } from "./adapters/vscode/mementoTaskDependencyRepository";
 import { AgentActivityBridge } from "./host/agentActivityBridge";
 import { ApprovalBridge } from "./host/approvalBridge";
+import { RuntimePreflight } from "./host/runtimePreflight";
 import { ActivityService } from "./modules/activity/public";
 import { ApprovalService } from "./modules/approvals/public";
 import { IntegrateTaskWorkflow, IntegrationStrategy } from "./modules/integration/public";
@@ -69,6 +70,7 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   const executions = new MementoExecutionRepository(context.workspaceState);
   const commandRunner = new NodeCommandRunner();
+  const runtimePreflight = new RuntimePreflight(commandRunner);
   const gitWorkspaces = new GitWorkspaceAdapter(commandRunner);
   const capacity = new ExecutionCapacityGate();
   const activity = new ActivityService(
@@ -151,10 +153,40 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("amazingMultiCodex.refreshTasks", () => {
       tree.refresh();
     }),
-    vscode.commands.registerCommand("amazingMultiCodex.showRuntimeStatus", () => {
+    vscode.commands.registerCommand("amazingMultiCodex.showRuntimeStatus", async () => {
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder || workspaceFolder.uri.scheme !== "file") {
+        void vscode.window.showErrorMessage("Open a local Git workspace to check MultiCodex readiness.");
+        return;
+      }
+      const settings = readSettings();
+      if (!settings.ok) {
+        const action = await vscode.window.showErrorMessage(settings.error.message, "Open Settings");
+        if (action === "Open Settings") {
+          await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:amazing-multicodex.amazing-multicodex");
+        }
+        return;
+      }
+      const checks = await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: "Checking MultiCodex readiness",
+        cancellable: false
+      }, () => runtimePreflight.inspect({
+        cwd: workspaceFolder.uri.fsPath,
+        codexExecutable: settings.value.codexExecutable,
+        baseRef: settings.value.baseRef
+      }));
       const health = codex.current()?.health() ?? { status: "disconnected" as const };
-      const detail = health.status === "ready" && health.userAgent ? ` (${health.userAgent})` : "";
-      void vscode.window.showInformationMessage(`MultiCodex runtime: ${health.status}${detail}`);
+      await vscode.window.showQuickPick(checks.map(check => ({
+        label: `$(${check.ok ? "pass-filled" : "error"}) ${check.label}`,
+        description: check.ok ? "Ready" : "Needs attention",
+        detail: check.detail
+      })), {
+        title: `MultiCodex readiness · App Server ${health.status}`,
+        placeHolder: checks.every(check => check.ok)
+          ? "All prerequisites are ready. The App Server starts when a task runs."
+          : "Resolve failed checks before starting a task."
+      });
     }),
     vscode.commands.registerCommand("amazingMultiCodex.queueTask", async (task?: TaskProps) => {
       if (!task) {
