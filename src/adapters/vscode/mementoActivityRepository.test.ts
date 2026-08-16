@@ -54,15 +54,32 @@ test("serializes concurrent appends and assigns unique sequences", async () => {
 
 test("evicts oldest activity when the total character budget is exceeded", async () => {
   const repository = new MementoActivityRepository(new FakeState());
-  for (const summary of ["first", "second", "third"]) {
-    await repository.append({
-      id: summary as ActivityId, taskId: "task-1" as TaskId, kind: "agentMessage", summary,
-      detail: "x".repeat(800_000), occurredAt: new Date("2026-08-15T12:00:00Z")
+  for (let index = 0; index < 12; index += 1) {
+    const appended = await repository.append({
+      id: `record-${index}` as ActivityId, taskId: "task-1" as TaskId, kind: "agentMessage",
+      summary: `record-${index}`, detail: "x".repeat(180_000), occurredAt: new Date("2026-08-15T12:00:00Z")
     });
+    assert.equal(appended.ok, true);
   }
   const records = await repository.listByTask("task-1" as TaskId);
   assert.equal(records.ok, true);
-  if (records.ok) assert.deepEqual(records.value.map(record => record.summary), ["third", "second"]);
+  if (records.ok) {
+    assert.equal(records.value.length, 11);
+    assert.equal(records.value[0]?.summary, "record-11");
+    assert.equal(records.value.some(record => record.summary === "record-0"), false);
+  }
+});
+
+test("rejects an oversized activity before corrupting persisted state", async () => {
+  const repository = new MementoActivityRepository(new FakeState());
+  const appended = await repository.append({
+    id: "record" as ActivityId, taskId: "task-1" as TaskId, kind: "agentMessage",
+    summary: "record", detail: "x".repeat(200_001), occurredAt: new Date("2026-08-15T12:00:00Z")
+  });
+  assert.equal(appended.ok, false);
+  if (!appended.ok) assert.equal(appended.error.code, "activity.record-invalid");
+  const records = await repository.listByTask("task-1" as TaskId);
+  assert.equal(records.ok && records.value.length, 0);
 });
 
 test("returns no activity when the requested limit is zero", async () => {

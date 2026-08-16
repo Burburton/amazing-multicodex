@@ -35,6 +35,16 @@ test("returns a typed error for malformed stored task state", async () => {
   if (!listed.ok) assert.equal(listed.error.code, "task.state-invalid");
 });
 
+test("rejects duplicate persisted task identities", async () => {
+  const record = {
+    id: "task-1", title: "Task", acceptanceCriteria: [], priority: "normal", status: "draft",
+    createdAt: "2026-08-15T12:00:00.000Z", updatedAt: "2026-08-15T12:00:00.000Z", version: 0
+  };
+  const listed = await new MementoTaskRepository(new FakeState([record, record])).list();
+  assert.equal(listed.ok, false);
+  if (!listed.ok) assert.equal(listed.error.code, "task.state-invalid");
+});
+
 test("serializes concurrent saves so different tasks are not lost", async () => {
   const repository = new MementoTaskRepository(new FakeState());
   const first = Task.create({ id: "task-1" as TaskId, title: "First", now: new Date("2026-08-15T12:00:00Z") });

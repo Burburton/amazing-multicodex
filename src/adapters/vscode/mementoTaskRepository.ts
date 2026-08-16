@@ -38,6 +38,7 @@ export class MementoTaskRepository implements TaskRepository {
     const actual = index === -1 ? -1 : records.value[index].version;
     if (actual !== expectedVersion) return err(conflict(snapshot.id, expectedVersion, actual));
     const stored = toStored(snapshot);
+    if (!isStoredTask(stored)) return err(invalidTask());
     if (index === -1) records.value.unshift(stored);
     else records.value[index] = stored;
     try {
@@ -57,7 +58,7 @@ export class MementoTaskRepository implements TaskRepository {
   private records(): Result<StoredTask[]> {
     try {
       const stored = this.state.get<unknown>(STORAGE_KEY, []);
-      if (!Array.isArray(stored) || !stored.every(isStoredTask)) return err(corruptState());
+      if (!Array.isArray(stored) || !stored.every(isStoredTask) || !hasUniqueIds(stored)) return err(corruptState());
       return ok([...stored]);
     } catch (cause) {
       return err(persistenceFailure(cause));
@@ -74,16 +75,21 @@ const priorities = new Set(["low", "normal", "high", "urgent"]);
 function isStoredTask(value: unknown): value is StoredTask {
   if (!value || typeof value !== "object") return false;
   const task = value as Record<string, unknown>;
-  return typeof task.id === "string" && task.id.length > 0
-    && typeof task.title === "string"
-    && (task.description === undefined || typeof task.description === "string")
-    && (task.statusReason === undefined || typeof task.statusReason === "string")
-    && Array.isArray(task.acceptanceCriteria) && task.acceptanceCriteria.every(item => typeof item === "string")
+  return typeof task.id === "string" && task.id.length > 0 && task.id.length <= 1_000
+    && typeof task.title === "string" && task.title.length > 0 && task.title.length <= 200
+    && (task.description === undefined || (typeof task.description === "string" && task.description.length <= 20_000))
+    && (task.statusReason === undefined || (typeof task.statusReason === "string" && task.statusReason.length <= 2_000))
+    && Array.isArray(task.acceptanceCriteria) && task.acceptanceCriteria.length <= 50
+    && task.acceptanceCriteria.every(item => typeof item === "string" && item.length <= 2_000)
     && typeof task.priority === "string" && priorities.has(task.priority)
     && typeof task.status === "string" && statuses.has(task.status)
     && typeof task.createdAt === "string" && !Number.isNaN(Date.parse(task.createdAt))
     && typeof task.updatedAt === "string" && !Number.isNaN(Date.parse(task.updatedAt))
     && typeof task.version === "number" && Number.isInteger(task.version) && task.version >= 0;
+}
+
+function hasUniqueIds(records: readonly StoredTask[]): boolean {
+  return new Set(records.map(record => record.id)).size === records.length;
 }
 
 function toStored(props: TaskProps): StoredTask {
@@ -108,6 +114,13 @@ function corruptState(): AppError {
   return {
     code: "task.state-invalid", category: "internal",
     message: "Stored task state is invalid.", retryable: false
+  };
+}
+
+function invalidTask(): AppError {
+  return {
+    code: "task.record-invalid", category: "validation",
+    message: "Task fields exceed safe persistence limits.", retryable: false
   };
 }
 

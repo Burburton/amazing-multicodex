@@ -80,6 +80,7 @@ export class MementoExecutionRepository implements ExecutionRepository {
     const actual = index === -1 ? -1 : records.value[index].version;
     if (actual !== expectedVersion) return err(conflict(record.id, expectedVersion, actual));
     const stored = toStored(record);
+    if (!isStoredExecution(stored)) return err(invalidExecution());
     if (index === -1) records.value.unshift(stored);
     else records.value[index] = stored;
     const compacted = compactExecutionHistory(records.value);
@@ -100,7 +101,7 @@ export class MementoExecutionRepository implements ExecutionRepository {
   private records(): Result<StoredExecution[]> {
     try {
       const stored = this.state.get<unknown>(STORAGE_KEY, []);
-      if (!Array.isArray(stored) || !stored.every(isStoredExecution)) return err(corruptState());
+      if (!Array.isArray(stored) || !stored.every(isStoredExecution) || !hasUniqueIds(stored)) return err(corruptState());
       return ok([...stored]);
     } catch (cause) {
       return err(persistenceFailure(cause));
@@ -131,20 +132,28 @@ function isStoredExecution(value: unknown): value is StoredExecution {
   const execution = value as Record<string, unknown>;
   const workspace = execution.workspace as Record<string, unknown> | undefined;
   const agent = execution.agent as Record<string, unknown> | undefined;
-  return typeof execution.id === "string" && execution.id.length > 0
-    && typeof execution.taskId === "string" && execution.taskId.length > 0
-    && !!workspace && typeof workspace.id === "string" && workspace.id.length > 0
+  return boundedString(execution.id, 1_000)
+    && boundedString(execution.taskId, 1_000)
+    && !!workspace && boundedString(workspace.id, 1_000)
     && typeof workspace.taskId === "string" && workspace.taskId === execution.taskId
-    && typeof workspace.path === "string"
-    && typeof workspace.repositoryRoot === "string" && typeof workspace.worktreeRoot === "string"
-    && typeof workspace.branch === "string" && typeof workspace.baseRef === "string"
+    && boundedString(workspace.path, 32_000)
+    && boundedString(workspace.repositoryRoot, 32_000) && boundedString(workspace.worktreeRoot, 32_000)
+    && boundedString(workspace.branch, 4_096) && boundedString(workspace.baseRef, 4_096)
     && (agent === undefined || (
-      typeof agent.executionId === "string" && typeof agent.threadId === "string" && typeof agent.turnId === "string"
+      boundedString(agent.executionId, 4_096) && boundedString(agent.threadId, 4_096) && boundedString(agent.turnId, 4_096)
     ))
     && ["prepared", "running", "completed", "failed", "cancelled"].includes(String(execution.status))
     && typeof execution.createdAt === "string" && !Number.isNaN(Date.parse(execution.createdAt))
     && typeof execution.updatedAt === "string" && !Number.isNaN(Date.parse(execution.updatedAt))
     && typeof execution.version === "number" && Number.isInteger(execution.version) && execution.version >= 0;
+}
+
+function boundedString(value: unknown, max: number): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= max;
+}
+
+function hasUniqueIds(records: readonly StoredExecution[]): boolean {
+  return new Set(records.map(record => record.id)).size === records.length;
 }
 
 function toStored(record: TaskExecutionRecord): StoredExecution {
@@ -179,6 +188,13 @@ function corruptState(): AppError {
   return {
     code: "execution.state-invalid", category: "internal",
     message: "Stored execution state is invalid.", retryable: false
+  };
+}
+
+function invalidExecution(): AppError {
+  return {
+    code: "execution.record-invalid", category: "validation",
+    message: "Execution fields exceed safe persistence limits.", retryable: false
   };
 }
 

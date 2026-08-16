@@ -29,7 +29,9 @@ export class MementoActivityRepository implements ActivityRepository {
     if (!records.ok) return records;
     const sequence = (records.value.at(-1)?.sequence ?? 0) + 1;
     const complete: ActivityRecord = { ...record, sequence };
-    records.value.push({ ...complete, occurredAt: complete.occurredAt.toISOString() });
+    const stored = { ...complete, occurredAt: complete.occurredAt.toISOString() };
+    if (!isStoredActivity(stored)) return err(invalidActivity());
+    records.value.push(stored);
     if (records.value.length > MAX_RECORDS) records.value.splice(0, records.value.length - MAX_RECORDS);
     let characters = records.value.reduce((total, item) => total + item.summary.length + (item.detail?.length ?? 0), 0);
     while (characters > MAX_TOTAL_CHARACTERS && records.value.length > 1) {
@@ -59,7 +61,7 @@ export class MementoActivityRepository implements ActivityRepository {
   private records(): Result<StoredActivity[]> {
     try {
       const stored = this.state.get<unknown>(STORAGE_KEY, []);
-      if (!Array.isArray(stored) || !stored.every(isStoredActivity)) return err(corruptState());
+      if (!Array.isArray(stored) || !stored.every(isStoredActivity) || !hasUniqueIds(stored)) return err(corruptState());
       return ok([...stored]);
     } catch (cause) {
       return err(persistenceError(cause));
@@ -70,18 +72,30 @@ export class MementoActivityRepository implements ActivityRepository {
 function isStoredActivity(value: unknown): value is StoredActivity {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
-  return typeof record.id === "string" && typeof record.taskId === "string"
+  return typeof record.id === "string" && record.id.length > 0 && record.id.length <= 1_000
+    && typeof record.taskId === "string" && record.taskId.length > 0 && record.taskId.length <= 1_000
     && ["agentMessage", "tool", "approval", "validation", "lifecycle", "error"].includes(String(record.kind))
-    && typeof record.summary === "string"
-    && (record.detail === undefined || typeof record.detail === "string")
+    && typeof record.summary === "string" && record.summary.length <= 500
+    && (record.detail === undefined || (typeof record.detail === "string" && record.detail.length <= 200_000))
     && typeof record.occurredAt === "string" && !Number.isNaN(Date.parse(record.occurredAt))
     && typeof record.sequence === "number" && Number.isInteger(record.sequence) && record.sequence > 0;
+}
+
+function hasUniqueIds(records: readonly StoredActivity[]): boolean {
+  return new Set(records.map(record => record.id)).size === records.length;
 }
 
 function corruptState(): AppError {
   return {
     code: "activity.state-invalid", category: "internal",
     message: "Stored activity state is invalid.", retryable: false
+  };
+}
+
+function invalidActivity(): AppError {
+  return {
+    code: "activity.record-invalid", category: "validation",
+    message: "Activity fields exceed safe persistence limits.", retryable: false
   };
 }
 

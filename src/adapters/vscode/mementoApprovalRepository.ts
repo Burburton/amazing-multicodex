@@ -48,6 +48,7 @@ export class MementoApprovalRepository implements ApprovalRepository {
     const actual = index === -1 ? -1 : records.value[index].version;
     if (actual !== expectedVersion) return err(conflict(snapshot.id, expectedVersion, actual));
     const stored = toStored(snapshot);
+    if (!isStoredApproval(stored)) return err(invalidApproval());
     if (index === -1) records.value.unshift(stored);
     else records.value[index] = stored;
     const bounded = boundRecords(records.value);
@@ -62,7 +63,7 @@ export class MementoApprovalRepository implements ApprovalRepository {
   private records(): Result<StoredApproval[]> {
     try {
       const stored = this.state.get<unknown>(STORAGE_KEY, []);
-      if (!Array.isArray(stored) || !stored.every(isStoredApproval)) return err(corruptState());
+      if (!Array.isArray(stored) || !stored.every(isStoredApproval) || !hasUniqueIds(stored)) return err(corruptState());
       return ok([...stored]);
     } catch (cause) {
       return err({ code: "approval.persistence-failed", category: "unavailable", message: "Approval state could not be read.", retryable: true, cause });
@@ -80,18 +81,35 @@ function boundRecords(records: readonly StoredApproval[]): StoredApproval[] {
 function isStoredApproval(value: unknown): value is StoredApproval {
   if (!value || typeof value !== "object") return false;
   const approval = value as Record<string, unknown>;
-  return typeof approval.id === "string" && typeof approval.taskId === "string"
-    && typeof approval.runtimeRequestId === "string" && typeof approval.runtimeMethod === "string"
+  return boundedString(approval.id, 1_000) && boundedString(approval.taskId, 1_000)
+    && boundedString(approval.runtimeRequestId, 1_000) && boundedString(approval.runtimeMethod, 500)
     && ["read", "write", "execute", "destructive", "external"].includes(String(approval.risk))
-    && typeof approval.title === "string"
+    && boundedString(approval.title, 500)
+    && (approval.detail === undefined || (typeof approval.detail === "string" && approval.detail.length <= 32_000))
+    && (approval.decisionReason === undefined || (typeof approval.decisionReason === "string" && approval.decisionReason.length <= 1_000))
     && ["pending", "approved", "declined", "cancelled"].includes(String(approval.status))
     && typeof approval.createdAt === "string" && !Number.isNaN(Date.parse(approval.createdAt))
     && (approval.decidedAt === undefined || (typeof approval.decidedAt === "string" && !Number.isNaN(Date.parse(approval.decidedAt))))
     && typeof approval.version === "number" && Number.isInteger(approval.version) && approval.version >= 0;
 }
 
+function boundedString(value: unknown, max: number): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= max;
+}
+
+function hasUniqueIds(records: readonly StoredApproval[]): boolean {
+  return new Set(records.map(record => record.id)).size === records.length;
+}
+
 function corruptState(): AppError {
   return { code: "approval.state-invalid", category: "internal", message: "Stored approval state is invalid.", retryable: false };
+}
+
+function invalidApproval(): AppError {
+  return {
+    code: "approval.record-invalid", category: "validation",
+    message: "Approval fields exceed safe persistence limits.", retryable: false
+  };
 }
 
 function toStored(props: ApprovalProps): StoredApproval {
