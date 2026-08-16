@@ -1,25 +1,24 @@
 import * as vscode from "vscode";
-import { MultiCodexTask } from "../domain/task";
-import { TaskStore } from "../application/taskStore";
+import { TaskProps, TaskRepository, TaskStatus } from "../modules/tasks/public";
 
-export class TaskTreeProvider implements vscode.TreeDataProvider<MultiCodexTask> {
+export class TaskTreeProvider implements vscode.TreeDataProvider<TaskProps> {
   private readonly changeEmitter = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changeEmitter.event;
 
-  constructor(private readonly store: TaskStore) {
-    store.onDidChange(() => this.changeEmitter.fire());
-  }
+  constructor(private readonly repository: TaskRepository) {}
 
-  getTreeItem(task: MultiCodexTask): vscode.TreeItem {
+  getTreeItem(task: TaskProps): vscode.TreeItem {
     const item = new vscode.TreeItem(task.title, vscode.TreeItemCollapsibleState.None);
-    item.description = `${task.status}${task.agentRole ? ` · ${task.agentRole}` : ""}`;
+    item.description = `${task.status} · ${task.priority}`;
     item.tooltip = task.description ?? "No task description";
     item.iconPath = new vscode.ThemeIcon(this.iconFor(task.status));
     return item;
   }
 
-  getChildren(): MultiCodexTask[] {
-    return this.store.list();
+  async getChildren(): Promise<TaskProps[]> {
+    const tasks = await this.repository.list();
+    if (!tasks.ok) return [];
+    return tasks.value.map(task => task.snapshot());
   }
 
   refresh(): void {
@@ -30,12 +29,18 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<MultiCodexTask>
     this.changeEmitter.dispose();
   }
 
-  private iconFor(status: MultiCodexTask["status"]): string {
+  private iconFor(status: TaskStatus): string {
     switch (status) {
       case "running": return "sync~spin";
+      case "preparing": return "loading~spin";
+      case "validating": return "beaker";
+      case "readyForReview": return "inspect";
+      case "integrating": return "git-merge";
       case "completed": return "pass-filled";
       case "failed": return "error";
       case "blocked": return "warning";
+      case "awaitingApproval": return "key";
+      case "cancelled": return "circle-slash";
       default: return "circle-outline";
     }
   }

@@ -2,8 +2,10 @@
 .vscode/
 node_modules/
 src/
+scripts/
 tsconfig.json
-*.map
+**/*.map
+out/**/*.test.js
 *.vsix
 README.md
 package-lock.json

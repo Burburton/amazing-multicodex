@@ -57,7 +57,7 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "compile": "node scripts/clean-out.js && tsc -p ./",
     "watch": "tsc -watch -p ./",
     "check": "tsc --noEmit -p ./",
     "test": "npm run compile && node --test out/**/*.test.js",
