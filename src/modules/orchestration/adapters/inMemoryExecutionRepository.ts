@@ -16,6 +16,12 @@ export class InMemoryExecutionRepository implements ExecutionRepository {
     ));
   }
 
+  async findLatestByTask(taskId: TaskId): Promise<Result<TaskExecutionRecord | undefined>> {
+    return ok([...this.records.values()]
+      .filter(record => record.taskId === taskId)
+      .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())[0]);
+  }
+
   async findByAgent(threadId: AgentThreadId, turnId: AgentTurnId): Promise<Result<TaskExecutionRecord | undefined>> {
     return ok([...this.records.values()].find(record =>
       record.agent?.threadId === threadId && record.agent.turnId === turnId

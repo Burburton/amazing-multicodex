@@ -22,7 +22,8 @@
     "onCommand:amazingMultiCodex.startTask",
     "onCommand:amazingMultiCodex.resumeTask",
     "onCommand:amazingMultiCodex.showActivity",
-    "onCommand:amazingMultiCodex.cancelTask"
+    "onCommand:amazingMultiCodex.cancelTask",
+    "onCommand:amazingMultiCodex.validateTask"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -59,6 +60,26 @@
           "minimum": 1000,
           "maximum": 200000,
           "description": "Maximum number of characters retained for one streamed agent message."
+        },
+        "amazingMultiCodex.validationCommands": {
+          "type": "array",
+          "default": [
+            {
+              "label": "Git whitespace check",
+              "executable": "git",
+              "args": ["diff", "--check"]
+            }
+          ],
+          "items": {
+            "type": "object",
+            "required": ["label", "executable", "args"],
+            "properties": {
+              "label": { "type": "string" },
+              "executable": { "type": "string" },
+              "args": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "description": "Ordered validation commands run inside a completed task worktree."
         }
       }
     },
@@ -99,6 +120,11 @@
         "command": "amazingMultiCodex.cancelTask",
         "title": "MultiCodex: Cancel Task",
         "icon": "$(stop-circle)"
+      },
+      {
+        "command": "amazingMultiCodex.validateTask",
+        "title": "MultiCodex: Validate Task",
+        "icon": "$(beaker)"
       }
     ],
     "menus": {
@@ -133,6 +159,11 @@
         {
           "command": "amazingMultiCodex.cancelTask",
           "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.running || viewItem == multicodexTask.awaitingApproval)",
+          "group": "inline"
+        },
+        {
+          "command": "amazingMultiCodex.validateTask",
+          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.validating",
           "group": "inline"
         }
       ]

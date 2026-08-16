@@ -21,6 +21,7 @@ export interface TaskExecutionRecord {
 export interface ExecutionRepository {
   findById(id: TaskExecutionId): Promise<Result<TaskExecutionRecord | undefined>>;
   findActiveByTask(taskId: TaskId): Promise<Result<TaskExecutionRecord | undefined>>;
+  findLatestByTask(taskId: TaskId): Promise<Result<TaskExecutionRecord | undefined>>;
   findByAgent(threadId: AgentThreadId, turnId: AgentTurnId): Promise<Result<TaskExecutionRecord | undefined>>;
   save(record: TaskExecutionRecord, expectedVersion: number): Promise<Result<void>>;
 }

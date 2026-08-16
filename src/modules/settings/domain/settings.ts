@@ -6,6 +6,13 @@ export interface MultiCodexSettings {
   readonly baseRef: string;
   readonly concurrencyLimit: number;
   readonly maxActivityCharacters: number;
+  readonly validationCommands: readonly ValidationCommandSetting[];
+}
+
+export interface ValidationCommandSetting {
+  readonly label: string;
+  readonly executable: string;
+  readonly args: readonly string[];
 }
 
 export type SettingsInput = Partial<MultiCodexSettings>;
@@ -15,7 +22,10 @@ export const defaultSettings: MultiCodexSettings = {
   requestTimeoutMs: 30_000,
   baseRef: "HEAD",
   concurrencyLimit: 2,
-  maxActivityCharacters: 32_000
+  maxActivityCharacters: 32_000,
+  validationCommands: [
+    { label: "Git whitespace check", executable: "git", args: ["diff", "--check"] }
+  ]
 };
 
 export function parseSettings(input: SettingsInput): Result<MultiCodexSettings> {
@@ -24,7 +34,8 @@ export function parseSettings(input: SettingsInput): Result<MultiCodexSettings> 
     requestTimeoutMs: input.requestTimeoutMs ?? defaultSettings.requestTimeoutMs,
     baseRef: input.baseRef ?? defaultSettings.baseRef,
     concurrencyLimit: input.concurrencyLimit ?? defaultSettings.concurrencyLimit,
-    maxActivityCharacters: input.maxActivityCharacters ?? defaultSettings.maxActivityCharacters
+    maxActivityCharacters: input.maxActivityCharacters ?? defaultSettings.maxActivityCharacters,
+    validationCommands: input.validationCommands ?? defaultSettings.validationCommands
   };
   if (!value.codexExecutable.trim()) return err(settingError("settings.codex-executable", "Codex executable cannot be empty."));
   if (!value.baseRef.trim()) return err(settingError("settings.base-ref", "Git base ref cannot be empty."));
@@ -36,6 +47,11 @@ export function parseSettings(input: SettingsInput): Result<MultiCodexSettings> 
   }
   if (!Number.isInteger(value.maxActivityCharacters) || value.maxActivityCharacters < 1_000 || value.maxActivityCharacters > 200_000) {
     return err(settingError("settings.activity-limit", "Activity message limit must be between 1,000 and 200,000 characters."));
+  }
+  if (value.validationCommands.length === 0 || value.validationCommands.some(command =>
+    !command.label.trim() || !command.executable.trim() || !Array.isArray(command.args)
+  )) {
+    return err(settingError("settings.validation-commands", "At least one valid validation command is required."));
   }
   return ok({
     ...value,

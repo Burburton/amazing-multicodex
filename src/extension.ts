@@ -11,14 +11,20 @@ import { AgentActivityBridge } from "./host/agentActivityBridge";
 import { ApprovalBridge } from "./host/approvalBridge";
 import { ActivityService } from "./modules/activity/public";
 import { ApprovalService } from "./modules/approvals/public";
-import { parseSettings } from "./modules/settings/public";
+import { ValidationCommandSetting, parseSettings } from "./modules/settings/public";
 import {
   AgentEventCoordinator,
   CancelTaskWorkflow,
   ResumeTaskWorkflow,
-  StartTaskWorkflow
+  StartTaskWorkflow,
+  ValidateTaskWorkflow
 } from "./modules/orchestration/public";
 import { CreateTaskHandler, TaskLifecycleService, TaskProps } from "./modules/tasks/public";
+import {
+  RunValidationHandler,
+  ValidationCheckId,
+  ValidationProfileId
+} from "./modules/validation/public";
 import { SystemClock } from "./shared/core/clock";
 import { CryptoIdGenerator } from "./shared/core/idGenerator";
 import { TaskTreeProvider } from "./ui/taskTreeProvider";
@@ -242,6 +248,50 @@ export function activate(context: vscode.ExtensionContext): void {
       const cancelled = await new CancelTaskWorkflow(lifecycle, agent, executions, clock).execute(task.id);
       tree.refresh();
       if (!cancelled.ok) void vscode.window.showErrorMessage(cancelled.error.message);
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.validateTask", async (task?: TaskProps) => {
+      if (!task) {
+        void vscode.window.showErrorMessage("Select a task waiting for validation.");
+        return;
+      }
+      const settings = readSettings();
+      if (!settings.ok) {
+        void vscode.window.showErrorMessage(settings.error.message);
+        return;
+      }
+      const result = await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Validating MultiCodex task: ${task.title}`,
+        cancellable: false
+      }, () => new ValidateTaskWorkflow(
+        lifecycle,
+        executions,
+        new RunValidationHandler(new NodeCommandRunner(), clock, ids)
+      ).execute({
+        taskId: task.id,
+        profile: {
+          id: "configured" as ValidationProfileId,
+          mode: "sequential",
+          checks: settings.value.validationCommands.map((command, index) => ({
+            id: `configured-${index + 1}` as ValidationCheckId,
+            label: command.label,
+            executable: command.executable,
+            args: command.args
+          }))
+        }
+      }));
+      tree.refresh();
+      if (!result.ok) {
+        void vscode.window.showErrorMessage(result.error.message);
+        return;
+      }
+      await activity.record({
+        taskId: task.id,
+        kind: result.value.status === "passed" ? "validation" : "error",
+        summary: `Validation ${result.value.status}`,
+        detail: result.value.checks.map(check => `${check.checkId}: ${check.status}`).join("\n")
+      });
+      void vscode.window.showInformationMessage(`Validation ${result.value.status}: ${task.title}`);
     })
   );
 
@@ -266,7 +316,8 @@ export function activate(context: vscode.ExtensionContext): void {
       requestTimeoutMs: config.get<number>("requestTimeoutMs"),
       baseRef: config.get<string>("baseRef"),
       concurrencyLimit: config.get<number>("concurrencyLimit"),
-      maxActivityCharacters: config.get<number>("maxActivityCharacters")
+      maxActivityCharacters: config.get<number>("maxActivityCharacters"),
+      validationCommands: config.get<ValidationCommandSetting[]>("validationCommands")
     });
   }
 }

@@ -35,6 +35,13 @@ export class MementoExecutionRepository implements ExecutionRepository {
     )));
   }
 
+  async findLatestByTask(taskId: TaskId): Promise<Result<TaskExecutionRecord | undefined>> {
+    const record = this.records()
+      .filter(item => item.taskId === taskId)
+      .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
+    return ok(toDomainOptional(record));
+  }
+
   async findByAgent(
     threadId: AgentExecutionRef["threadId"],
     turnId: AgentExecutionRef["turnId"]
