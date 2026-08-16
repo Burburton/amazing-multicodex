@@ -28,7 +28,8 @@
     "onCommand:amazingMultiCodex.showChanges",
     "onCommand:amazingMultiCodex.integrateTask",
     "onCommand:amazingMultiCodex.addDependency",
-    "onCommand:amazingMultiCodex.removeDependency"
+    "onCommand:amazingMultiCodex.removeDependency",
+    "onCommand:amazingMultiCodex.releaseWorkspace"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -155,6 +156,11 @@
         "command": "amazingMultiCodex.removeDependency",
         "title": "MultiCodex: Remove Prerequisite",
         "icon": "$(remove)"
+      },
+      {
+        "command": "amazingMultiCodex.releaseWorkspace",
+        "title": "MultiCodex: Release Worktree",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -219,6 +225,11 @@
         {
           "command": "amazingMultiCodex.removeDependency",
           "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.draft || viewItem == multicodexTask.queued || viewItem == multicodexTask.blocked)",
+          "group": "navigation"
+        },
+        {
+          "command": "amazingMultiCodex.releaseWorkspace",
+          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.completed || viewItem == multicodexTask.cancelled)",
           "group": "navigation"
         }
       ]

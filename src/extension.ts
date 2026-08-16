@@ -20,6 +20,7 @@ import {
   CancelTaskWorkflow,
   DispatchQueuedTasksWorkflow,
   ExecutionCapacityGate,
+  ReleaseTaskWorkspaceWorkflow,
   ResumeTaskWorkflow,
   SchedulerPolicy,
   StartTaskWorkflow,
@@ -478,6 +479,25 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       void vscode.window.showInformationMessage(`Removed prerequisite '${selected.label}' from '${task.title}'.`);
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.releaseWorkspace", async (task?: TaskProps) => {
+      if (!task) {
+        void vscode.window.showErrorMessage("Select a completed or cancelled task workspace to release.");
+        return;
+      }
+      const confirmed = await vscode.window.showWarningMessage(
+        `Remove the clean Git worktree for '${task.title}'? The task history and branch are retained.`,
+        { modal: true }, "Remove Worktree"
+      );
+      if (confirmed !== "Remove Worktree") return;
+      const released = await new ReleaseTaskWorkspaceWorkflow(
+        lifecycle, executions, new GitWorkspaceAdapter(new NodeCommandRunner())
+      ).execute(task.id);
+      if (!released.ok) {
+        void vscode.window.showErrorMessage(released.error.message);
+        return;
+      }
+      void vscode.window.showInformationMessage(`Released worktree for: ${task.title}`);
     })
   );
 
