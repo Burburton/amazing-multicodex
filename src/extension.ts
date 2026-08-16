@@ -50,6 +50,7 @@ import { TaskDetailPanelManager, TaskDetailAction } from "./ui/taskDetailPanel";
 import { sortTasksForDisplay, taskPriorityLabel, taskStatusLabel } from "./ui/taskPresentation";
 
 export function activate(context: vscode.ExtensionContext): void {
+  const connectedTasks = new Set<TaskProps["id"]>();
   const repository = new MementoTaskRepository(context.workspaceState);
   const clock = new SystemClock();
   const createTask = new CreateTaskHandler(repository, clock, new CryptoIdGenerator());
@@ -67,8 +68,14 @@ export function activate(context: vscode.ExtensionContext): void {
   const codex = new CodexProcessSupervisor(new NodeProcessFactory(), {
     malformedProtocolLine: line => console.warn("MultiCodex ignored malformed Codex output", line),
     stderr: chunk => console.warn("Codex App Server:", chunk.trimEnd()),
-    exited: exit => console.info("Codex App Server exited", exit),
-    processError: error => console.error("Codex App Server error", error)
+    exited: exit => {
+      connectedTasks.clear();
+      console.info("Codex App Server exited", exit);
+    },
+    processError: error => {
+      connectedTasks.clear();
+      console.error("Codex App Server error", error);
+    }
   });
   const executions = new MementoExecutionRepository(context.workspaceState);
   const commandRunner = new NodeCommandRunner();
@@ -283,6 +290,7 @@ export function activate(context: vscode.ExtensionContext): void {
             capacity,
             dependencies
           );
+          connectedTasks.add(task.id);
           const started = await workflow.execute({
             taskId: task.id,
             repositoryRoot: workspaceFolder.uri.fsPath,
@@ -293,11 +301,13 @@ export function activate(context: vscode.ExtensionContext): void {
           });
           tree.refresh();
           if (!started.ok) {
+            connectedTasks.delete(task.id);
             void vscode.window.showErrorMessage(started.error.message);
             return;
           }
           void vscode.window.showInformationMessage(`Started MultiCodex task: ${task.title}`);
         } catch (cause) {
+          connectedTasks.delete(task.id);
           const message = cause instanceof Error ? cause.message : "Unknown startup error.";
           void vscode.window.showErrorMessage(`Could not start MultiCodex task: ${message}`);
         }
@@ -306,6 +316,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("amazingMultiCodex.resumeTask", async (task?: TaskProps) => {
       task = await selectTask(task, candidate => candidate.status === "running", "Resume a running task");
       if (!task) return;
+      if (connectedTasks.has(task.id)) {
+        void vscode.window.showInformationMessage(`'${task.title}' is already running in the connected Codex App Server.`);
+        return;
+      }
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
       if (!workspaceFolder || workspaceFolder.uri.scheme !== "file") {
         void vscode.window.showErrorMessage("Open the task's local Git workspace before resuming.");
@@ -323,14 +337,17 @@ export function activate(context: vscode.ExtensionContext): void {
           requestTimeoutMs: settings.value.requestTimeoutMs
         });
         bindAgent(agent, settings.value.maxActivityCharacters);
+        connectedTasks.add(task.id);
         const resumed = await new ResumeTaskWorkflow(lifecycle, agent, executions, clock)
           .execute({ taskId: task.id });
         if (!resumed.ok) {
+          connectedTasks.delete(task.id);
           void vscode.window.showErrorMessage(resumed.error.message);
           return;
         }
         void vscode.window.showInformationMessage(`Resumed MultiCodex task: ${task.title}`);
       } catch (cause) {
+        connectedTasks.delete(task.id);
         const message = cause instanceof Error ? cause.message : "Unknown resume error.";
         void vscode.window.showErrorMessage(`Could not resume MultiCodex task: ${message}`);
       }
@@ -373,7 +390,10 @@ export function activate(context: vscode.ExtensionContext): void {
         : await new AbandonTaskWorkflow(lifecycle, executions, clock).execute(task.id);
       tree.refresh();
       if (!cancelled.ok) void vscode.window.showErrorMessage(cancelled.error.message);
-      else void dispatchQueue(false);
+      else {
+        connectedTasks.delete(task.id);
+        void dispatchQueue(false);
+      }
     }),
     vscode.commands.registerCommand("amazingMultiCodex.validateTask", async (task?: TaskProps) => {
       task = await selectTask(task, candidate => candidate.status === "validating", "Validate a completed Codex task");
@@ -652,6 +672,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (notify) void vscode.window.showErrorMessage("Open a local Git workspace before dispatching tasks.");
       return;
     }
+    const connectionCandidates = new Set<TaskProps["id"]>();
     try {
       const listed = await repository.list();
       if (!listed.ok) throw listed.error;
@@ -674,7 +695,14 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       const dispatched = await new DispatchQueuedTasksWorkflow(
         repository, executions, dependencies, new SchedulerPolicy(), starter
-      ).execute({
+      );
+      for (const task of listed.value) {
+        if (task.snapshot().status === "queued") {
+          connectionCandidates.add(task.snapshot().id);
+          connectedTasks.add(task.snapshot().id);
+        }
+      }
+      const result = await dispatched.execute({
         repositoryRoot: workspaceFolder.uri.fsPath,
         worktreeRoot: vscode.Uri.joinPath(storage, "worktrees").fsPath,
         baseRef: settings.value.baseRef,
@@ -682,12 +710,17 @@ export function activate(context: vscode.ExtensionContext): void {
         model: settings.value.defaultModel
       });
       tree.refresh();
-      if (!dispatched.ok) throw dispatched.error;
-      const failed = dispatched.value.failures.length;
+      if (!result.ok) throw result.error;
+      const startedTaskIds = new Set(result.value.started);
+      for (const taskId of connectionCandidates) {
+        if (!startedTaskIds.has(taskId)) connectedTasks.delete(taskId);
+      }
+      const failed = result.value.failures.length;
       if (notify || failed) void vscode.window.showInformationMessage(
-        `Started ${dispatched.value.started.length} queued task(s)${failed ? `; ${failed} failed to start` : ""}.`
+        `Started ${result.value.started.length} queued task(s)${failed ? `; ${failed} failed to start` : ""}.`
       );
     } catch (cause) {
+      for (const taskId of connectionCandidates) connectedTasks.delete(taskId);
       console.error("Could not dispatch queued MultiCodex tasks", cause);
       if (notify) {
         const message = cause instanceof Error ? cause.message : typeof cause === "object" && cause && "message" in cause
@@ -702,10 +735,12 @@ export function activate(context: vscode.ExtensionContext): void {
     maxActivityCharacters: number
   ): void {
     if (boundAgent === agent) return;
+    connectedTasks.clear();
     coordinator?.stop();
     coordinator = new AgentEventCoordinator(agent, executions, lifecycle, clock, {
       error: (message, error) => console.error(message, error),
       taskChanged: taskId => {
+        connectedTasks.delete(taskId);
         tree.refresh();
         void taskDetails.refresh(taskId);
         void dispatchQueue(false);
