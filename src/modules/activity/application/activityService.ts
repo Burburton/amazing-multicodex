@@ -3,6 +3,7 @@ import { IdGenerator } from "../../../shared/core/idGenerator";
 import { Result } from "../../../shared/core/result";
 import { TaskId } from "../../tasks/public";
 import { ActivityKind, ActivityRecord } from "../domain/activity";
+import { redactSensitiveText } from "../domain/sensitiveText";
 import { ActivityRepository } from "../ports/activityRepository";
 
 export interface RecordActivityCommand {
@@ -24,8 +25,8 @@ export class ActivityService {
       id: this.ids.next() as ActivityRecord["id"],
       taskId: command.taskId,
       kind: command.kind,
-      summary: command.summary.trim(),
-      detail: command.detail?.trim() || undefined,
+      summary: redactSensitiveText(command.summary.trim()),
+      detail: command.detail ? redactSensitiveText(command.detail.trim()) || undefined : undefined,
       occurredAt: this.clock.now()
     });
   }
@@ -34,4 +35,3 @@ export class ActivityService {
     return this.repository.listByTask(taskId, limit);
   }
 }
-
