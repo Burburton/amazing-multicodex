@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { NodeCommandRunner } from "./nodeCommandRunner";
+import { BoundedOutputCapture, NodeCommandRunner } from "./nodeCommandRunner";
 
 test("command runner terminates a command for an already-aborted signal", async () => {
   const controller = new AbortController();
@@ -32,5 +32,17 @@ test("command runner bounds stdout capture", async () => {
 
   assert.equal(result.stdout.length, 8);
   assert.equal(result.stderr, "");
+  assert.equal(result.truncated, true);
+});
+
+test("shares the output budget across stdout and stderr", () => {
+  const capture = new BoundedOutputCapture(10);
+  capture.append("stdout", Buffer.from("a".repeat(8)));
+  capture.append("stderr", Buffer.from("b".repeat(8)));
+  const result = capture.result();
+
+  assert.equal(Buffer.byteLength(result.stdout) + Buffer.byteLength(result.stderr), 10);
+  assert.equal(result.stdout, "a".repeat(8));
+  assert.equal(result.stderr, "b".repeat(2));
   assert.equal(result.truncated, true);
 });
