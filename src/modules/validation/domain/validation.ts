@@ -48,8 +48,13 @@ const MAX_LABEL_CHARACTERS = 200;
 const MAX_EXECUTABLE_CHARACTERS = 4_096;
 const MAX_ARGUMENTS = 200;
 const MAX_ARGUMENT_CHARACTERS = 10_000;
+const MAX_TIMEOUT_MS = 3_600_000;
+const MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
 
 export function validateProfile(profile: ValidationProfile): Result<ValidationProfile> {
+  if (!profile.id || profile.id.length > 1_000 || !["sequential", "parallel"].includes(profile.mode)) {
+    return err(validationError("validation.invalid-profile", "Validation profile identity or mode is invalid."));
+  }
   if (profile.checks.length === 0) {
     return err(validationError("validation.empty-profile", "Validation profile must contain a check."));
   }
@@ -58,12 +63,22 @@ export function validateProfile(profile: ValidationProfile): Result<ValidationPr
   }
   const ids = new Set<ValidationCheckId>();
   for (const check of profile.checks) {
-    if (!check.label.trim() || !check.executable.trim()) {
-      return err(validationError("validation.invalid-check", "Validation checks require a label and executable."));
+    if (!check.id || check.id.length > 1_000 || !check.label.trim() || !check.executable.trim()) {
+      return err(validationError("validation.invalid-check", "Validation checks require a bounded identity, label, and executable."));
     }
     if (check.label.length > MAX_LABEL_CHARACTERS || check.executable.length > MAX_EXECUTABLE_CHARACTERS
       || check.args.length > MAX_ARGUMENTS || check.args.some(argument => argument.length > MAX_ARGUMENT_CHARACTERS)) {
       return err(validationError("validation.check-too-large", "Validation check labels, executables, or arguments exceed safe limits."));
+    }
+    if (check.timeoutMs !== undefined && (
+      !Number.isInteger(check.timeoutMs) || check.timeoutMs < 1 || check.timeoutMs > MAX_TIMEOUT_MS
+    )) {
+      return err(validationError("validation.invalid-timeout", `Validation timeout must be between 1 and ${MAX_TIMEOUT_MS} ms.`));
+    }
+    if (check.maxOutputBytes !== undefined && (
+      !Number.isInteger(check.maxOutputBytes) || check.maxOutputBytes < 1 || check.maxOutputBytes > MAX_OUTPUT_BYTES
+    )) {
+      return err(validationError("validation.invalid-output-limit", "Validation output limit must be between 1 byte and 10 MiB."));
     }
     if (ids.has(check.id)) {
       return err(validationError("validation.duplicate-check", "Validation check IDs must be unique."));

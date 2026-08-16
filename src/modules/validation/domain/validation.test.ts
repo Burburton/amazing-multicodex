@@ -43,3 +43,26 @@ test("rejects oversized validation profiles and commands", () => {
   assert.equal(oversized.ok, false);
   if (!oversized.ok) assert.equal(oversized.error.code, "validation.check-too-large");
 });
+
+test("rejects unsafe validation resource limits", () => {
+  const base = {
+    id: "profile" as ValidationProfileId,
+    mode: "sequential" as const
+  };
+  const timeout = validateProfile({
+    ...base,
+    checks: [{ id: "check" as ValidationCheckId, label: "Check", executable: "check", args: [], timeoutMs: -1 }]
+  });
+  assert.equal(timeout.ok, false);
+  if (!timeout.ok) assert.equal(timeout.error.code, "validation.invalid-timeout");
+
+  const output = validateProfile({
+    ...base,
+    checks: [{
+      id: "check" as ValidationCheckId, label: "Check", executable: "check", args: [],
+      maxOutputBytes: 10 * 1024 * 1024 + 1
+    }]
+  });
+  assert.equal(output.ok, false);
+  if (!output.ok) assert.equal(output.error.code, "validation.invalid-output-limit");
+});
