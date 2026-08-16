@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { redactSensitiveText } from "./sensitiveText";
+import { redactAndTruncateSensitiveText, redactSensitiveText } from "./sensitiveText";
 
 test("redacts common credentials while preserving useful context", () => {
   const text = [
@@ -30,4 +30,11 @@ test("redacts common credentials while preserving useful context", () => {
 
 test("leaves ordinary activity text unchanged", () => {
   assert.equal(redactSensitiveText("Ran npm test: 29 passed"), "Ran npm test: 29 passed");
+});
+
+test("marks bounded text after redacting its retained content", () => {
+  const bounded = redactAndTruncateSensitiveText("sk-example1234567890 " + "x".repeat(100), 40);
+  assert.equal(bounded.length, 40);
+  assert.equal(bounded.includes("sk-example"), false);
+  assert.match(bounded, /truncated/);
 });

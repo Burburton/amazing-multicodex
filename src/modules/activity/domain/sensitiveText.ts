@@ -1,1 +1,1 @@
-export { redactSensitiveText } from "../../../shared/core/sensitiveData";
+export { redactAndTruncateSensitiveText, redactSensitiveText } from "../../../shared/core/sensitiveData";

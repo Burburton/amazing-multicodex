@@ -14,6 +14,7 @@ const sensitiveKey = /(?:authorization|cookie|credential|password|secret|token|a
 const maxStringCharacters = 32_000;
 const maxCollectionItems = 100;
 const maxDepth = 6;
+const truncationMarker = "\n[… truncated …]";
 
 export function redactSensitiveText(value: string): string {
   return credentialPatterns.reduce(
@@ -22,14 +23,21 @@ export function redactSensitiveText(value: string): string {
   );
 }
 
+export function redactAndTruncateSensitiveText(value: string, maxCharacters = maxStringCharacters): string {
+  const redacted = redactSensitiveText(value);
+  if (redacted.length <= maxCharacters) return redacted;
+  if (maxCharacters <= truncationMarker.length) return truncationMarker.slice(0, Math.max(0, maxCharacters));
+  return `${redacted.slice(0, maxCharacters - truncationMarker.length)}${truncationMarker}`;
+}
+
 export function redactSensitiveData(value: unknown): unknown {
   return sanitize(value, 0, new WeakSet<object>());
 }
 
 function sanitize(value: unknown, depth: number, seen: WeakSet<object>): unknown {
-  if (typeof value === "string") return redactSensitiveText(value).slice(0, maxStringCharacters);
+  if (typeof value === "string") return redactAndTruncateSensitiveText(value);
   if (value === null || typeof value === "boolean" || typeof value === "number") return value;
-  if (typeof value !== "object") return redactSensitiveText(String(value)).slice(0, maxStringCharacters);
+  if (typeof value !== "object") return redactAndTruncateSensitiveText(String(value));
   if (depth >= maxDepth) return "[TRUNCATED]";
   if (seen.has(value)) return "[CIRCULAR]";
   seen.add(value);

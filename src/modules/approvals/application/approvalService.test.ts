@@ -63,3 +63,19 @@ test("redacts nested approval secrets before persistence", async () => {
     nested: { apiKey: "[REDACTED]" }
   });
 });
+
+test("bounds approval text before persistence", async () => {
+  const repository = new InMemoryApprovalRepository();
+  const captured = await new ApprovalService(repository, new FixedClock(), new FixedIds()).capture({
+    taskId: "task-1" as TaskId,
+    request: { requestId: "runtime-1", method: "approval", payload: {} },
+    risk: "execute",
+    title: "t".repeat(1_000),
+    detail: "d".repeat(50_000)
+  });
+  assert.equal(captured.ok, true);
+  if (!captured.ok) return;
+  assert.equal(captured.value.title.length, 500);
+  assert.equal(captured.value.detail?.length, 32_000);
+  assert.match(captured.value.detail ?? "", /truncated/);
+});

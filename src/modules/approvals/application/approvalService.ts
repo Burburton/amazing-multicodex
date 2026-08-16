@@ -1,7 +1,7 @@
 import { Clock } from "../../../shared/core/clock";
 import { IdGenerator } from "../../../shared/core/idGenerator";
 import { AppError, Result, err } from "../../../shared/core/result";
-import { redactSensitiveData, redactSensitiveText } from "../../../shared/core/sensitiveData";
+import { redactAndTruncateSensitiveText, redactSensitiveData } from "../../../shared/core/sensitiveData";
 import { AgentApprovalRequest } from "../../agents/public";
 import { TaskId } from "../../tasks/public";
 import { Approval, ApprovalId, ApprovalProps, ApprovalRisk, ApprovalStatus } from "../domain/approval";
@@ -37,8 +37,8 @@ export class ApprovalService {
       threadId: command.request.threadId,
       turnId: command.request.turnId,
       risk: command.risk,
-      title: redactSensitiveText(command.title),
-      detail: command.detail ? redactSensitiveText(command.detail) : undefined,
+      title: redactAndTruncateSensitiveText(command.title, 500),
+      detail: command.detail ? redactAndTruncateSensitiveText(command.detail, 32_000) : undefined,
       payload: redactSensitiveData(command.request.payload),
       now: this.clock.now()
     });
