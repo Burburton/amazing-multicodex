@@ -13,8 +13,9 @@ export interface IntegrateWorkspaceInput {
 
 export interface IntegrationResult {
   readonly sourceCommit: string;
-  readonly targetCommit: string;
+  readonly targetCommit?: string;
   readonly strategy: IntegrationStrategy;
+  readonly warning?: string;
 }
 
 export interface IntegrationPort {

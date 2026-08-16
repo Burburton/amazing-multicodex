@@ -58,6 +58,30 @@ test("squashes the resolved source commit rather than the mutable branch name", 
   assert.deepEqual(commands.calls[6].args, ["merge", "--squash", "source-sha"]);
 });
 
+test("treats a successful merge as committed when final HEAD inspection fails", async () => {
+  const commands = new Commands();
+  const failed = { ...success("", 128), stderr: "cannot read HEAD" };
+  commands.results.push(
+    success(), success("index-tree\n"), success(), success(), success("", 0),
+    success("source-sha\n"), success(), failed
+  );
+  const result = await new GitIntegrationAdapter(commands).integrate({
+    workspace: {
+      id: "workspace" as WorkspaceId, taskId: "task" as TaskId,
+      repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/task",
+      branch: "multicodex/task", baseRef: "base"
+    },
+    targetRepositoryRoot: "/repo", strategy: "merge", commitMessage: "Integrate task", reviewedPatch: ""
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.targetCommit, undefined);
+  assert.match(result.value.warning ?? "", /succeeded/);
+  assert.equal(commands.calls.filter(call => call.args[0] === "merge").length, 1);
+  assert.equal(commands.calls.some(call => call.args[0] === "reset"), false);
+});
+
 test("rejects a workspace whose HEAD still equals its immutable base", async () => {
   const commands = new Commands();
   commands.results.push(success(), success("index-tree\n"), success(), success(), success("", 0), success("base-sha\n"));

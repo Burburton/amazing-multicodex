@@ -499,10 +499,14 @@ export function activate(context: vscode.ExtensionContext): void {
         taskId: task.id,
         kind: "lifecycle",
         summary: `Integrated with ${integrated.value.strategy}`,
-        detail: integrated.value.targetCommit
+        detail: integrated.value.targetCommit ?? integrated.value.warning
       });
       void dispatchQueue(false);
-      void vscode.window.showInformationMessage(`Integrated MultiCodex task: ${task.title}`);
+      if (integrated.value.warning) {
+        void vscode.window.showWarningMessage(`${integrated.value.warning} Verify the target repository HEAD.`);
+      } else {
+        void vscode.window.showInformationMessage(`Integrated MultiCodex task: ${task.title}`);
+      }
     }),
     vscode.commands.registerCommand("amazingMultiCodex.addDependency", async (task?: TaskProps) => {
       if (!task) {

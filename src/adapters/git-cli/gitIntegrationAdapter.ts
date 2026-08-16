@@ -62,11 +62,11 @@ export class GitIntegrationAdapter implements IntegrationPort {
       if (!committed.ok) return this.rollback(input.targetRepositoryRoot, committed.error);
     }
     const target = await this.git(input.targetRepositoryRoot, ["rev-parse", "HEAD"]);
-    if (!target.ok) return target;
     return ok({
       sourceCommit,
-      targetCommit: target.value.stdout.trim(),
-      strategy: input.strategy
+      targetCommit: target.ok ? target.value.stdout.trim() : undefined,
+      strategy: input.strategy,
+      warning: target.ok ? undefined : "Integration succeeded, but the resulting target commit could not be read."
     });
   }
 
