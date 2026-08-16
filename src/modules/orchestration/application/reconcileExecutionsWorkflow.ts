@@ -24,11 +24,13 @@ export class ReconcileExecutionsWorkflow {
     const blocked: TaskId[] = [];
     for (const execution of active.value) {
       const snapshot = await this.workspaces.inspect(execution.workspace);
-      if (execution.status === "running" && snapshot.ok) {
+      if (execution.status === "running" && execution.agent && snapshot.ok) {
         resumable.push(execution.taskId);
         continue;
       }
-      const reason = snapshot.ok ? "recovery.prepared-interrupted" : snapshot.error.code;
+      const reason = !snapshot.ok
+        ? snapshot.error.code
+        : execution.status === "running" ? "recovery.execution-unbound" : "recovery.prepared-interrupted";
       const failed = await this.failExecution(execution);
       if (!failed.ok) return failed;
       const transitioned = await this.tasks.transition(execution.taskId, "blocked", reason);

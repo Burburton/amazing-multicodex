@@ -27,6 +27,9 @@ test("keeps running executions resumable and blocks interrupted preparation", as
       id: `${id}-execution` as TaskExecutionId,
       taskId: id as TaskId,
       workspace: workspace(id),
+      agent: id === "running" ? {
+        executionId: "agent-running", threadId: "thread-running", turnId: "turn-running"
+      } as never : undefined,
       status: executionStatus,
       createdAt: clock.now(), updatedAt: clock.now(), version: 0
     }, -1);
@@ -68,6 +71,33 @@ test("blocks a running execution whose persisted worktree is unavailable", async
   assert.equal(result.ok, true);
   const task = await tasks.findById("task" as TaskId);
   assert.equal(task.ok && task.value?.snapshot().status, "blocked");
+});
+
+test("blocks a running execution without an agent thread binding", async () => {
+  const clock = new FixedClock();
+  const tasks = new InMemoryTaskRepository();
+  const created = Task.create({ id: "task" as TaskId, title: "task", now: clock.now() });
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  for (const status of ["queued", "preparing", "running"] as const) created.value.transition(status, clock.now());
+  await tasks.save(created.value, -1);
+  const executions = new InMemoryExecutionRepository();
+  await executions.save({
+    id: "execution" as TaskExecutionId, taskId: "task" as TaskId, workspace: workspace("task"),
+    status: "running", createdAt: clock.now(), updatedAt: clock.now(), version: 0
+  }, -1);
+  const workspaces = { inspect: async (value: WorkspaceRef): Promise<Result<WorkspaceSnapshot>> => ok({
+    ...value, headCommit: "head", dirty: false
+  }) };
+
+  const result = await new ReconcileExecutionsWorkflow(
+    executions, new TaskLifecycleService(tasks, clock), workspaces as never, clock
+  ).execute();
+
+  assert.equal(result.ok, true);
+  if (result.ok) assert.deepEqual(result.value, { resumable: [], blocked: ["task"] });
+  const task = await tasks.findById("task" as TaskId);
+  assert.equal(task.ok && task.value?.snapshot().statusReason, "recovery.execution-unbound");
 });
 
 function workspace(id: string): WorkspaceRef {
