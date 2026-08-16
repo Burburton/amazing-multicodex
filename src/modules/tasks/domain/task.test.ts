@@ -30,3 +30,12 @@ test("increments version for valid transitions", () => {
   assert.equal(result.value.snapshot().version, 1);
 });
 
+test("allows an integration-blocked task to return to review", () => {
+  const result = Task.create({ id: "task-1" as TaskId, title: "Build it", now });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  for (const status of ["queued", "preparing", "running", "validating", "readyForReview", "integrating", "blocked"] as const) {
+    assert.equal(result.value.transition(status, now).ok, true);
+  }
+  assert.equal(result.value.transition("readyForReview", now, "integration-retry").ok, true);
+});

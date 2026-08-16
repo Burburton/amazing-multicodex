@@ -12,7 +12,9 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskProps> {
     item.description = `${task.status} · ${task.priority}`;
     item.tooltip = task.description ?? "No task description";
     item.iconPath = new vscode.ThemeIcon(this.iconFor(task.status));
-    item.contextValue = `multicodexTask.${task.status}`;
+    item.contextValue = task.status === "blocked" && task.statusReason?.startsWith("integration.")
+      ? "multicodexTask.blocked.integration"
+      : `multicodexTask.${task.status}`;
     return item;
   }
 

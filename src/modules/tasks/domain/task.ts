@@ -51,7 +51,7 @@ const transitions: Readonly<Record<TaskStatus, readonly TaskStatus[]>> = {
   readyForReview: ["integrating", "running", "cancelled"],
   integrating: ["completed", "blocked", "failed", "cancelled"],
   completed: [],
-  blocked: ["queued", "cancelled"],
+  blocked: ["queued", "readyForReview", "cancelled"],
   failed: ["queued", "cancelled"],
   cancelled: ["queued"]
 };
@@ -119,4 +119,3 @@ function normalizeOptional(value: string | undefined): string | undefined {
 function taskError(code: string, message: string, context?: Record<string, string>): AppError {
   return { code, category: "validation", message, retryable: false, context };
 }
-

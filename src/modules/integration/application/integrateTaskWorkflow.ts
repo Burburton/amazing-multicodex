@@ -20,6 +20,10 @@ export class IntegrateTaskWorkflow {
   async execute(command: IntegrateTaskCommand): Promise<Result<IntegrationResult>> {
     const task = await this.tasks.get(command.taskId);
     if (!task.ok) return task;
+    if (task.value.status === "blocked" && task.value.statusReason?.startsWith("integration.")) {
+      const restored = await this.tasks.transition(command.taskId, "readyForReview", "integration-retry");
+      if (!restored.ok) return restored;
+    }
     const transitioning = await this.tasks.transition(command.taskId, "integrating");
     if (!transitioning.ok) return transitioning;
     const execution = await this.executions.findLatestByTask(command.taskId);
@@ -43,4 +47,3 @@ export class IntegrateTaskWorkflow {
     return completed.ok ? integrated : completed;
   }
 }
-

@@ -191,7 +191,7 @@
         },
         {
           "command": "amazingMultiCodex.integrateTask",
-          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.readyForReview",
+          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.readyForReview || viewItem == multicodexTask.blocked.integration)",
           "group": "inline"
         },
         {
