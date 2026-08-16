@@ -90,13 +90,15 @@ test("coordinates queued task, workspace, agent, and execution record", async ()
     repositoryRoot: "/repo",
     worktreeRoot: "/worktrees",
     baseRef: "main",
-    concurrencyLimit: 2
+    concurrencyLimit: 2,
+    model: "gpt-test"
   });
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.value.status, "running");
   assert.equal(workspaces.prepared?.branch, "multicodex/build-feature-12345678-id2");
   assert.equal(agents.started?.cwd, "/worktrees/id-2");
+  assert.equal(agents.started?.model, "gpt-test");
   assert.match(agents.started?.prompt ?? "", /Acceptance criteria/);
   const task = await tasks.findById("task-12345678" as TaskId);
   assert.equal(task.ok && task.value?.snapshot().status, "running");
