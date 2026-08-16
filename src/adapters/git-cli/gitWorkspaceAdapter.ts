@@ -104,6 +104,9 @@ export class GitWorkspaceAdapter implements WorkspacePort {
     } catch (cause) {
       return err(gitError("git.unavailable", "Git command could not be started.", true, cause));
     }
+    if (result.truncated) {
+      return err(gitError("git.output-truncated", "Git output exceeded the safe inspection limit."));
+    }
     if (!acceptedExitCodes.includes(result.exitCode)) {
       return err(gitError(
         "git.command-failed",

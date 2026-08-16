@@ -93,3 +93,11 @@ test("includes untracked files in review patches", async () => {
     "diff", "--no-index", "--binary", "--", "/dev/null", "new.ts"
   ]);
 });
+
+test("rejects truncated diff output instead of presenting a partial review", async () => {
+  const commands = new ScriptedCommands();
+  commands.responses.push(success(), { ...success("partial patch"), truncated: true });
+  const changes = await new GitWorkspaceAdapter(commands).diff(workspace);
+  assert.equal(changes.ok, false);
+  if (!changes.ok) assert.equal(changes.error.code, "git.output-truncated");
+});

@@ -91,6 +91,12 @@ export class GitIntegrationAdapter implements IntegrationPort {
     } catch (cause) {
       return err(integrationError("git.unavailable", "Git command could not be started.", true, cause));
     }
+    if (result.truncated) {
+      return err(integrationError(
+        "integration.output-truncated",
+        "Git output exceeded the safe review limit, so integration was stopped."
+      ));
+    }
     if (!acceptedExitCodes.includes(result.exitCode)) {
       return err(integrationError(
         "integration.git-failed",

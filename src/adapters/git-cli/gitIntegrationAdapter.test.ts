@@ -145,3 +145,20 @@ test("rejects integration into a different repository before running Git", async
   if (!result.ok) assert.equal(result.error.code, "integration.target-mismatch");
   assert.equal(commands.calls.length, 0);
 });
+
+test("rejects truncated Git output before changing the target", async () => {
+  const commands = new Commands();
+  commands.results.push({ ...success("partial status"), truncated: true });
+  const result = await new GitIntegrationAdapter(commands).integrate({
+    workspace: {
+      id: "workspace" as WorkspaceId, taskId: "task" as TaskId,
+      repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/task",
+      branch: "multicodex/task", baseRef: "base"
+    },
+    targetRepositoryRoot: "/repo", strategy: "merge", commitMessage: "Integrate task",
+    reviewedPatch: "patch"
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "integration.output-truncated");
+  assert.equal(commands.calls.length, 1);
+});
