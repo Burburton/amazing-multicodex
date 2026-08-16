@@ -95,19 +95,31 @@ export class StartTaskWorkflow {
       const updated = await this.executions.save(execution, 0);
       if (!updated.ok) {
         await this.agents.interrupt(agent);
+        await this.failExecution({ ...execution, agent: undefined, status: "prepared", version: 0 });
         await this.tasks.transition(command.taskId, "blocked", updated.error.code);
         return updated;
       }
       const running = await this.tasks.transition(command.taskId, "running");
       if (!running.ok) {
         await this.agents.interrupt(agent);
+        await this.failExecution(execution);
         return running;
       }
       return ok(execution);
     } catch (cause) {
+      await this.failExecution(execution);
       await this.tasks.transition(command.taskId, "blocked", "codex.start-failed");
       return err(startFailed(cause));
     }
+  }
+
+  private async failExecution(execution: TaskExecutionRecord): Promise<void> {
+    await this.executions.save({
+      ...execution,
+      status: "failed",
+      updatedAt: this.clock.now(),
+      version: execution.version + 1
+    }, execution.version);
   }
 }
 

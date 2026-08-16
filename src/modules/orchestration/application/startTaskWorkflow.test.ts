@@ -36,9 +36,11 @@ class SequenceIds implements IdGenerator {
 }
 class FakeAgent implements AgentRuntimePort {
   started?: StartExecutionInput;
+  failStart = false;
   initialize(): Promise<void> { return Promise.resolve(); }
   async start(input: StartExecutionInput): Promise<AgentExecutionRef> {
     this.started = input;
+    if (this.failStart) throw new Error("unavailable");
     return { executionId: "agent-1" as ExecutionId, threadId: "thread-1" as never, turnId: "turn-1" as never };
   }
   resume(_input: ResumeExecutionInput): Promise<AgentExecutionRef> { throw new Error("unused"); }
@@ -102,4 +104,33 @@ test("coordinates queued task, workspace, agent, and execution record", async ()
   assert.match(agents.started?.prompt ?? "", /Acceptance criteria/);
   const task = await tasks.findById("task-12345678" as TaskId);
   assert.equal(task.ok && task.value?.snapshot().status, "running");
+});
+
+test("marks a prepared execution failed when Codex cannot start", async () => {
+  const clock = new FixedClock();
+  const tasks = new InMemoryTaskRepository();
+  const created = Task.create({ id: "task-failed" as TaskId, title: "Failure", now: clock.now() });
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  created.value.transition("queued", clock.now());
+  await tasks.save(created.value, -1);
+  const agents = new FakeAgent();
+  agents.failStart = true;
+  const executions = new InMemoryExecutionRepository();
+  const workflow = new StartTaskWorkflow(
+    new TaskLifecycleService(tasks, clock), new FakeWorkspaces(), agents, executions, clock,
+    new SequenceIds(), new ExecutionCapacityGate(),
+    new TaskDependencyService(new InMemoryTaskDependencyRepository(), tasks)
+  );
+
+  const result = await workflow.execute({
+    taskId: "task-failed" as TaskId, repositoryRoot: "/repo", worktreeRoot: "/worktrees",
+    baseRef: "main", concurrencyLimit: 1
+  });
+
+  assert.equal(result.ok, false);
+  const active = await executions.listActive();
+  assert.equal(active.ok && active.value.length, 0);
+  const task = await tasks.findById("task-failed" as TaskId);
+  assert.equal(task.ok && task.value?.snapshot().status, "blocked");
 });
