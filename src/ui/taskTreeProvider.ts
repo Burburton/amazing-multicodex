@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { TaskProps, TaskRepository, TaskStatus } from "../modules/tasks/public";
+import { sortTasksForDisplay, taskPriorityLabel, taskStatusLabel, taskTooltip } from "./taskPresentation";
 
 export interface TaskTreeDiagnostics {
   readonly error: (message: string, cause?: unknown) => void;
@@ -16,12 +17,21 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskProps> {
 
   getTreeItem(task: TaskProps): vscode.TreeItem {
     const item = new vscode.TreeItem(task.title, vscode.TreeItemCollapsibleState.None);
-    item.description = `${task.status} · ${task.priority}`;
-    item.tooltip = task.description ?? "No task description";
+    item.description = `${taskStatusLabel(task.status)} · ${taskPriorityLabel(task.priority)}`;
+    item.tooltip = taskTooltip(task);
     item.iconPath = new vscode.ThemeIcon(this.iconFor(task.status));
     item.contextValue = task.status === "blocked" && task.statusReason?.startsWith("integration.")
       ? "multicodexTask.blocked.integration"
       : `multicodexTask.${task.status}`;
+    item.command = {
+      command: "amazingMultiCodex.showTaskDetails",
+      title: "Show Task Details",
+      arguments: [task]
+    };
+    item.accessibilityInformation = {
+      label: `${task.title}, ${taskStatusLabel(task.status)}, ${taskPriorityLabel(task.priority)} priority`,
+      role: "button"
+    };
     return item;
   }
 
@@ -32,7 +42,7 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskProps> {
       this.diagnostics.error(tasks.error.message, tasks.error);
       return [];
     }
-    const snapshots = tasks.value.map(task => task.snapshot());
+    const snapshots = sortTasksForDisplay(tasks.value.map(task => task.snapshot()));
     await vscode.commands.executeCommand("setContext", "amazingMultiCodex.hasTasks", snapshots.length > 0);
     return snapshots;
   }
