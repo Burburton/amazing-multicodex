@@ -74,6 +74,19 @@ export class MementoExecutionRepository implements ExecutionRepository {
     return this.writes.run(() => this.saveOnce(record, expectedVersion));
   }
 
+  async deleteByTask(taskId: TaskId): Promise<Result<void>> {
+    return this.writes.run(async () => {
+      const records = this.records();
+      if (!records.ok) return records;
+      try {
+        await this.state.update(STORAGE_KEY, records.value.filter(record => record.taskId !== taskId));
+        return ok(undefined);
+      } catch (cause) {
+        return err(persistenceFailure(cause));
+      }
+    });
+  }
+
   private async saveOnce(record: TaskExecutionRecord, expectedVersion: number): Promise<Result<void>> {
     const records = this.records();
     if (!records.ok) return records;

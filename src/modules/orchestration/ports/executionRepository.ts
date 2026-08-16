@@ -26,3 +26,7 @@ export interface ExecutionRepository {
   findByAgent(threadId: AgentThreadId, turnId: AgentTurnId): Promise<Result<TaskExecutionRecord | undefined>>;
   save(record: TaskExecutionRecord, expectedVersion: number): Promise<Result<void>>;
 }
+
+export interface ExecutionDeletionRepository {
+  deleteByTask(taskId: TaskId): Promise<Result<void>>;
+}

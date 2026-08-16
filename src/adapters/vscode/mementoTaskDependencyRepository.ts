@@ -30,6 +30,11 @@ export class MementoTaskDependencyRepository implements TaskDependencyRepository
       return err(persistenceError(cause));
     }
   }
+  async deleteByTask(taskId: TaskDependency["taskId"]): Promise<Result<void>> {
+    const listed = await this.list();
+    if (!listed.ok) return listed;
+    return this.replace(listed.value.filter(edge => edge.taskId !== taskId && edge.prerequisiteId !== taskId));
+  }
 }
 
 function isValidGraph(dependencies: readonly TaskDependency[]): boolean {

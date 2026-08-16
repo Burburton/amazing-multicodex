@@ -40,6 +40,19 @@ export class MementoApprovalRepository implements ApprovalRepository {
     return this.writes.run(() => this.saveOnce(approval, expectedVersion));
   }
 
+  async deleteByTask(taskId: TaskId): Promise<Result<void>> {
+    return this.writes.run(async () => {
+      const records = this.records();
+      if (!records.ok) return records;
+      try {
+        await this.state.update(STORAGE_KEY, records.value.filter(record => record.taskId !== taskId));
+        return ok(undefined);
+      } catch (cause) {
+        return err({ code: "approval.persistence-failed", category: "unavailable", message: "Approval state could not be deleted.", retryable: true, cause });
+      }
+    });
+  }
+
   private async saveOnce(approval: Approval, expectedVersion: number): Promise<Result<void>> {
     const records = this.records();
     if (!records.ok) return records;

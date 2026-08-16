@@ -4,10 +4,10 @@ import { TaskDetailProjection } from "../modules/orchestration/public";
 import { TaskId, TaskProps } from "../modules/tasks/public";
 import { taskPriorityLabel, taskStatusLabel } from "./taskPresentation";
 
-export type TaskDetailAction = "edit" | "queue" | "start" | "resume" | "steer" | "cancel" | "validate" | "changes" | "integrate" | "recoverIntegration" | "release";
+export type TaskDetailAction = "edit" | "queue" | "start" | "resume" | "steer" | "cancel" | "validate" | "changes" | "integrate" | "recoverIntegration" | "release" | "delete";
 
 const allowedActions = new Set<TaskDetailAction>([
-  "edit", "queue", "start", "resume", "steer", "cancel", "validate", "changes", "integrate", "recoverIntegration", "release"
+  "edit", "queue", "start", "resume", "steer", "cancel", "validate", "changes", "integrate", "recoverIntegration", "release", "delete"
 ]);
 
 export class TaskDetailPanelManager implements vscode.Disposable {
@@ -70,7 +70,11 @@ export class TaskDetailPanelManager implements vscode.Disposable {
 
   private async refreshPanel(taskId: TaskId, panel: vscode.WebviewPanel): Promise<void> {
     const detail = await this.load(taskId);
-    if (!detail || !this.panels.has(taskId)) return;
+    if (!detail) {
+      if (this.panels.has(taskId)) panel.dispose();
+      return;
+    }
+    if (!this.panels.has(taskId)) return;
     panel.title = `MultiCodex: ${detail.task.title}`;
     panel.webview.html = render(detail);
   }
@@ -99,14 +103,14 @@ function render(detail: TaskDetailProjection): string {
     ? detail.activity.map(item => `<article><header><span class="badge">${escapeHtml(item.kind)}</span><strong>${escapeHtml(item.summary)}</strong><time>${escapeHtml(item.occurredAt.toLocaleString())}</time></header>${item.detail ? `<pre>${escapeHtml(item.detail)}</pre>` : ""}</article>`).join("")
     : '<p class="muted">No activity recorded.</p>';
   const actions = actionsFor(task.status, task.statusReason, !!detail.latestExecution)
-    .map(action => `<button data-action="${action.id}">${escapeHtml(action.label)}</button>`).join("");
+    .map(action => `<button data-action="${action.id}"${action.id === "delete" ? ' class="danger"' : ""}>${escapeHtml(action.label)}</button>`).join("");
   const statusReason = task.statusReason
     ? `<aside role="status"><strong>Current status:</strong> ${escapeHtml(task.statusReason)}</aside>`
     : "";
   return `<!doctype html>
 <html lang="en"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style nonce="${nonce}">
-body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:24px;max-width:980px;margin:auto}h1{margin-bottom:6px}h2{margin-top:28px;border-bottom:1px solid var(--vscode-panel-border);padding-bottom:7px}.meta,.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.actions{margin:18px 0}.actions button{color:var(--vscode-button-foreground);background:var(--vscode-button-background);border:0;padding:7px 12px;border-radius:2px;cursor:pointer}.actions button:hover{background:var(--vscode-button-hoverBackground)}.actions button:disabled{opacity:.65;cursor:wait}.badge{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);border-radius:10px;padding:2px 8px;font-size:12px}.muted,time{color:var(--vscode-descriptionForeground)}aside{border-left:3px solid var(--vscode-editorWarning-foreground);background:var(--vscode-textBlockQuote-background);padding:10px 12px;margin:16px 0}dl{display:grid;grid-template-columns:max-content 1fr;gap:7px 14px}dt{font-weight:600}dd{margin:0;min-width:0;overflow-wrap:anywhere}article{border-left:2px solid var(--vscode-panel-border);padding:4px 0 12px 14px;margin:12px 0}article header{display:flex;gap:9px;align-items:center}time{margin-left:auto;font-size:12px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--vscode-textCodeBlock-background);padding:10px;border-radius:4px}code{font-family:var(--vscode-editor-font-family)}
+body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:24px;max-width:980px;margin:auto}h1{margin-bottom:6px}h2{margin-top:28px;border-bottom:1px solid var(--vscode-panel-border);padding-bottom:7px}.meta,.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.actions{margin:18px 0}.actions button{color:var(--vscode-button-foreground);background:var(--vscode-button-background);border:0;padding:7px 12px;border-radius:2px;cursor:pointer}.actions button:hover{background:var(--vscode-button-hoverBackground)}.actions button.danger{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);outline:1px solid var(--vscode-inputValidation-errorBorder)}.actions button.danger:hover{background:var(--vscode-button-secondaryHoverBackground)}.actions button:disabled{opacity:.65;cursor:wait}.badge{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);border-radius:10px;padding:2px 8px;font-size:12px}.muted,time{color:var(--vscode-descriptionForeground)}aside{border-left:3px solid var(--vscode-editorWarning-foreground);background:var(--vscode-textBlockQuote-background);padding:10px 12px;margin:16px 0}dl{display:grid;grid-template-columns:max-content 1fr;gap:7px 14px}dt{font-weight:600}dd{margin:0;min-width:0;overflow-wrap:anywhere}article{border-left:2px solid var(--vscode-panel-border);padding:4px 0 12px 14px;margin:12px 0}article header{display:flex;gap:9px;align-items:center}time{margin-left:auto;font-size:12px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--vscode-textCodeBlock-background);padding:10px;border-radius:4px}code{font-family:var(--vscode-editor-font-family)}
 </style></head><body>
 <h1>${escapeHtml(task.title)}</h1><div class="meta"><span class="badge">${escapeHtml(taskStatusLabel(task.status))}</span><span>${escapeHtml(taskPriorityLabel(task.priority))} priority</span><span class="muted">Updated ${escapeHtml(task.updatedAt.toLocaleString())}</span></div>
 ${task.description ? `<p>${escapeHtml(task.description)}</p>` : ""}${statusReason}<div class="actions">${actions}</div>
@@ -122,17 +126,18 @@ function actionsFor(
 ): readonly { id: TaskDetailAction; label: string }[] {
   const inspect = hasExecution ? [{ id: "changes" as const, label: "View changes" }] : [];
   switch (status) {
-    case "draft": return [{ id: "edit", label: "Edit draft" }, { id: "queue", label: "Queue task" }];
-    case "failed": return [...inspect, { id: "queue", label: "Queue task" }];
+    case "draft": return [{ id: "edit", label: "Edit draft" }, { id: "queue", label: "Queue task" }, { id: "delete", label: "Delete task" }];
+    case "failed": return [...inspect, { id: "queue", label: "Queue task" }, { id: "delete", label: "Delete task" }];
     case "cancelled": return [
       ...inspect,
       { id: "queue", label: "Queue task" },
-      ...(hasExecution ? [{ id: "release" as const, label: "Release worktree" }] : [])
+      ...(hasExecution ? [{ id: "release" as const, label: "Release worktree" }] : []),
+      { id: "delete", label: "Delete task" }
     ];
     case "blocked": return reason?.startsWith("integration.")
-      ? [...inspect, { id: "integrate", label: "Retry integration" }]
-      : [...inspect, { id: "queue", label: "Retry task" }];
-    case "queued": return [{ id: "start", label: "Start now" }];
+      ? [...inspect, { id: "integrate", label: "Retry integration" }, { id: "delete", label: "Delete task" }]
+      : [...inspect, { id: "queue", label: "Retry task" }, { id: "delete", label: "Delete task" }];
+    case "queued": return [{ id: "start", label: "Start now" }, { id: "cancel", label: "Cancel" }];
     case "running": return [
       { id: "steer", label: "Send follow-up" },
       { id: "resume", label: "Reconnect / resume" },
@@ -140,9 +145,10 @@ function actionsFor(
     ];
     case "awaitingApproval": return [{ id: "cancel", label: "Cancel" }];
     case "validating": return [{ id: "validate", label: "Run validation" }, { id: "changes", label: "View changes" }];
-    case "readyForReview": return [{ id: "changes", label: "View changes" }, { id: "integrate", label: "Integrate" }];
+    case "readyForReview": return [{ id: "changes", label: "View changes" }, { id: "integrate", label: "Integrate" }, { id: "delete", label: "Delete task" }];
     case "integrating": return [{ id: "recoverIntegration", label: "Recover integration" }];
-    case "completed": return [{ id: "changes", label: "View changes" }, { id: "release", label: "Release worktree" }];
+    case "completed": return [{ id: "changes", label: "View changes" }, { id: "release", label: "Release worktree" }, { id: "delete", label: "Delete task" }];
+    case "deleting": return [{ id: "delete", label: "Retry deletion" }];
     default: return [];
   }
 }

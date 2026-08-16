@@ -92,3 +92,16 @@ test("returns no activity when the requested limit is zero", async () => {
   assert.equal(records.ok, true);
   if (records.ok) assert.deepEqual(records.value, []);
 });
+
+test("deletes only activity owned by the selected task", async () => {
+  const repository = new MementoActivityRepository(new FakeState());
+  for (const taskId of ["delete", "keep"]) await repository.append({
+    id: taskId as ActivityId, taskId: taskId as TaskId, kind: "lifecycle",
+    summary: taskId, occurredAt: new Date(0)
+  });
+  assert.equal((await repository.deleteByTask("delete" as TaskId)).ok, true);
+  const deleted = await repository.listByTask("delete" as TaskId);
+  const kept = await repository.listByTask("keep" as TaskId);
+  assert.equal(deleted.ok && deleted.value.length, 0);
+  assert.equal(kept.ok && kept.value.length, 1);
+});

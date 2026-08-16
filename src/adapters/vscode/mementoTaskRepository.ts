@@ -31,6 +31,23 @@ export class MementoTaskRepository implements TaskRepository {
     return this.writes.run(() => this.saveOnce(task, expectedVersion));
   }
 
+  async delete(id: TaskId, expectedVersion: number): Promise<Result<void>> {
+    return this.writes.run(async () => {
+      const records = this.records();
+      if (!records.ok) return records;
+      const index = records.value.findIndex(record => record.id === id);
+      const actual = index === -1 ? -1 : records.value[index].version;
+      if (index === -1 || actual !== expectedVersion) return err(conflict(id, expectedVersion, actual));
+      records.value.splice(index, 1);
+      try {
+        await this.state.update(STORAGE_KEY, records.value);
+        return ok(undefined);
+      } catch (cause) {
+        return err(persistenceFailure(cause));
+      }
+    });
+  }
+
   private async saveOnce(task: Task, expectedVersion: number): Promise<Result<void>> {
     const records = this.records();
     if (!records.ok) return records;
@@ -72,7 +89,7 @@ export class MementoTaskRepository implements TaskRepository {
 
 const statuses = new Set([
   "draft", "queued", "preparing", "running", "awaitingApproval", "validating",
-  "readyForReview", "integrating", "completed", "blocked", "failed", "cancelled"
+  "readyForReview", "integrating", "completed", "blocked", "failed", "cancelled", "deleting"
 ]);
 const priorities = new Set(["low", "normal", "high", "urgent"]);
 

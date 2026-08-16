@@ -38,6 +38,11 @@ export class InMemoryExecutionRepository implements ExecutionRepository {
     this.records.set(record.id, { ...record });
     return ok(undefined);
   }
+
+  async deleteByTask(taskId: TaskId): Promise<Result<void>> {
+    for (const [id, record] of this.records) if (record.taskId === taskId) this.records.delete(id);
+    return ok(undefined);
+  }
 }
 
 function conflict(id: TaskExecutionId, expected: number, actual: number): AppError {

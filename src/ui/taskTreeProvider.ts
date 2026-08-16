@@ -67,6 +67,7 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskProps> {
       case "blocked": return "warning";
       case "awaitingApproval": return "key";
       case "cancelled": return "circle-slash";
+      case "deleting": return "trash";
       default: return "circle-outline";
     }
   }

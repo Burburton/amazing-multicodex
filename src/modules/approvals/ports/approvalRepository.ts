@@ -8,3 +8,6 @@ export interface ApprovalRepository {
   save(approval: Approval, expectedVersion: number): Promise<Result<void>>;
 }
 
+export interface ApprovalDeletionRepository {
+  deleteByTask(taskId: TaskId): Promise<Result<void>>;
+}

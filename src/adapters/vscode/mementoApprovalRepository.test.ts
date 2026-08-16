@@ -54,3 +54,14 @@ test("bounds terminal approval history while retaining pending requests", async 
   assert.equal(stored.length, 500);
   assert.equal(stored.some(record => record.id === "pending" && record.status === "pending"), true);
 });
+
+test("deletes approvals owned by a task", async () => {
+  const state = new FakeState([{
+    id: "approval", taskId: "task", runtimeRequestId: "request", runtimeMethod: "approval",
+    risk: "write", title: "Approval", payload: {}, status: "pending",
+    createdAt: "2026-08-16T12:00:00.000Z", version: 0
+  }]);
+  const repository = new MementoApprovalRepository(state);
+  assert.equal((await repository.deleteByTask("task" as TaskId)).ok, true);
+  assert.deepEqual(state.value, []);
+});

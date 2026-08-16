@@ -7,8 +7,11 @@ export interface TaskRepository {
   save(task: Task, expectedVersion: number): Promise<Result<void>>;
 }
 
+export interface TaskDeletionRepository {
+  delete(id: TaskId, expectedVersion: number): Promise<Result<void>>;
+}
+
 export interface TaskRecordMapper {
   toRecord(task: Task): TaskProps;
   toDomain(record: TaskProps): Task;
 }
-

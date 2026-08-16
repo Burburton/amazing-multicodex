@@ -30,6 +30,8 @@ The extension currently provides the core multi-task execution loop:
 - credential redaction before activity records are persisted;
 - a reusable, action-enabled task-detail webview that refreshes after commands
   and when revealed;
+- confirmed task deletion that removes associated history, dependencies, and
+  worktrees while retaining Git branches;
 - startup reconciliation for interrupted preparation and missing worktrees;
 - bounded validation runtime, activity memory, and persisted activity size;
 - automated module-boundary checks, unit/contract tests, and VSIX packaging.
@@ -103,6 +105,13 @@ on a task that still shows as running.
 5. Run validation, inspect the complete worktree diff, and integrate it with a
    merge or squash after review.
 6. Release the isolated worktree after the task is completed or cancelled.
+
+Stopped tasks can be deleted from their detail panel, tree context menu, or
+`MultiCodex: Delete Task`. Deletion also removes the task's executions,
+approvals, activity, and dependency edges. The confirmation warns before any
+uncommitted worktree changes are discarded; the Git branch is retained. If a
+cleanup step is interrupted, the task remains in `Deleting` state and exposes a
+retry action instead of leaving partially active task state.
 
 Search VS Code Settings for `Amazing MultiCodex` to configure the Codex
 executable, default model, base ref, concurrency limit, timeouts, and ordered

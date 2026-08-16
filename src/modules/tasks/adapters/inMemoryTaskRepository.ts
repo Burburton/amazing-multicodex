@@ -24,6 +24,13 @@ export class InMemoryTaskRepository implements TaskRepository {
     this.records.set(snapshot.id, snapshot);
     return ok(undefined);
   }
+
+  async delete(id: TaskId, expectedVersion: number): Promise<Result<void>> {
+    const actual = this.records.get(id)?.version ?? -1;
+    if (actual !== expectedVersion) return err(conflict(id, expectedVersion, actual));
+    this.records.delete(id);
+    return ok(undefined);
+  }
 }
 
 function conflict(id: TaskId, expected: number, actual: number): AppError {
@@ -35,4 +42,3 @@ function conflict(id: TaskId, expected: number, actual: number): AppError {
     context: { id, expected: String(expected), actual: String(actual) }
   };
 }
-

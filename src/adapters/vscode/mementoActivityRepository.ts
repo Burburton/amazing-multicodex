@@ -58,6 +58,19 @@ export class MementoActivityRepository implements ActivityRepository {
       .map(record => ({ ...record, occurredAt: new Date(record.occurredAt) })));
   }
 
+  async deleteByTask(taskId: TaskId): Promise<Result<void>> {
+    return this.writes.run(async () => {
+      const records = this.records();
+      if (!records.ok) return records;
+      try {
+        await this.state.update(STORAGE_KEY, records.value.filter(record => record.taskId !== taskId));
+        return ok(undefined);
+      } catch (cause) {
+        return err(persistenceError(cause));
+      }
+    });
+  }
+
   private records(): Result<StoredActivity[]> {
     try {
       const stored = this.state.get<unknown>(STORAGE_KEY, []);

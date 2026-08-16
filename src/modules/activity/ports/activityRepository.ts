@@ -7,3 +7,6 @@ export interface ActivityRepository {
   listByTask(taskId: TaskId, limit?: number): Promise<Result<readonly ActivityRecord[]>>;
 }
 
+export interface ActivityDeletionRepository {
+  deleteByTask(taskId: TaskId): Promise<Result<void>>;
+}

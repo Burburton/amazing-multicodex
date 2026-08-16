@@ -83,3 +83,15 @@ test("refuses to add a task after reaching storage capacity", async () => {
   assert.equal(saved.ok, false);
   if (!saved.ok) assert.equal(saved.error.code, "task.capacity-exceeded");
 });
+
+test("deletes a task with optimistic version checking", async () => {
+  const repository = new MementoTaskRepository(new FakeState());
+  const created = Task.create({ id: "task" as TaskId, title: "Delete", now: new Date(0) });
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  assert.equal((await repository.save(created.value, -1)).ok, true);
+  assert.equal((await repository.delete("task" as TaskId, 1)).ok, false);
+  assert.equal((await repository.delete("task" as TaskId, 0)).ok, true);
+  const missing = await repository.findById("task" as TaskId);
+  assert.equal(missing.ok && missing.value, undefined);
+});

@@ -12,6 +12,7 @@ export type { SteerTaskWorkflowCommand } from "./application/steerTaskWorkflow";
 export { CancelTaskWorkflow } from "./application/cancelTaskWorkflow";
 export { AbandonTaskWorkflow } from "./application/abandonTaskWorkflow";
 export { ReleaseTaskWorkspaceWorkflow } from "./application/releaseTaskWorkspaceWorkflow";
+export { DeleteTaskWorkflow } from "./application/deleteTaskWorkflow";
 export { ReconcileExecutionsWorkflow } from "./application/reconcileExecutionsWorkflow";
 export type { ReconciliationReport } from "./application/reconcileExecutionsWorkflow";
 export { ValidateTaskWorkflow } from "./application/validateTaskWorkflow";
@@ -22,6 +23,7 @@ export type { TaskDetailProjection, TaskPrerequisiteSummary } from "./applicatio
 export type { CoordinatorDiagnostics } from "./application/agentEventCoordinator";
 export type {
   ExecutionRepository,
+  ExecutionDeletionRepository,
   TaskExecutionId,
   TaskExecutionRecord,
   TaskExecutionStatus

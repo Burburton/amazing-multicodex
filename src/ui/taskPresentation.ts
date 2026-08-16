@@ -12,7 +12,8 @@ const statusLabels: Readonly<Record<TaskStatus, string>> = {
   completed: "Completed",
   blocked: "Blocked",
   failed: "Failed",
-  cancelled: "Cancelled"
+  cancelled: "Cancelled",
+  deleting: "Deleting"
 };
 
 const statusOrder: Readonly<Record<TaskStatus, number>> = {
@@ -27,7 +28,8 @@ const statusOrder: Readonly<Record<TaskStatus, number>> = {
   queued: 8,
   draft: 9,
   completed: 10,
-  cancelled: 11
+  cancelled: 11,
+  deleting: 0
 };
 
 const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 } as const;

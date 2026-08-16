@@ -1,4 +1,5 @@
 import { Result, ok } from "../../../shared/core/result";
+import { TaskId } from "../domain/task";
 import { TaskDependency, TaskDependencyRepository } from "../ports/taskDependencyRepository";
 
 export class InMemoryTaskDependencyRepository implements TaskDependencyRepository {
@@ -8,5 +9,8 @@ export class InMemoryTaskDependencyRepository implements TaskDependencyRepositor
     this.dependencies = [...dependencies];
     return ok(undefined);
   }
+  async deleteByTask(taskId: TaskId): Promise<Result<void>> {
+    this.dependencies = this.dependencies.filter(edge => edge.taskId !== taskId && edge.prerequisiteId !== taskId);
+    return ok(undefined);
+  }
 }
-

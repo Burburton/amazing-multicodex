@@ -188,3 +188,23 @@ test("bounds terminal history while preserving active and latest task executions
   assert.equal(latestHistory.ok && latestHistory.value?.id, "old-1001");
   assert.equal(latestNew.ok && latestNew.value?.id, "new-history");
 });
+
+test("deletes every execution owned by a task", async () => {
+  const state = new FakeState();
+  const repository = new MementoExecutionRepository(state);
+  const base = {
+    taskId: "task" as TaskId,
+    workspace: {
+      id: "workspace" as WorkspaceId, taskId: "task" as TaskId,
+      repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/task",
+      branch: "branch", baseRef: "main"
+    },
+    status: "completed" as const,
+    createdAt: new Date(0), updatedAt: new Date(0), version: 0
+  };
+  assert.equal((await repository.save({ ...base, id: "first" as TaskExecutionId }, -1)).ok, true);
+  assert.equal((await repository.save({ ...base, id: "second" as TaskExecutionId }, -1)).ok, true);
+  assert.equal((await repository.deleteByTask("task" as TaskId)).ok, true);
+  const latest = await repository.findLatestByTask("task" as TaskId);
+  assert.equal(latest.ok && latest.value, undefined);
+});

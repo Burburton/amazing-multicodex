@@ -70,3 +70,14 @@ test("refuses to persist an excessive number of dependency edges", async () => {
   assert.equal(replaced.ok, false);
   if (!replaced.ok) assert.equal(replaced.error.code, "task.dependency-graph-invalid");
 });
+
+test("deletes incoming and outgoing dependency edges for a task", async () => {
+  const repository = new MementoTaskDependencyRepository(new FakeState([
+    { taskId: "task", prerequisiteId: "first" },
+    { taskId: "second", prerequisiteId: "task" },
+    { taskId: "third", prerequisiteId: "first" }
+  ]));
+  assert.equal((await repository.deleteByTask("task" as TaskId)).ok, true);
+  const listed = await repository.list();
+  assert.deepEqual(listed, { ok: true, value: [{ taskId: "third", prerequisiteId: "first" }] });
+});

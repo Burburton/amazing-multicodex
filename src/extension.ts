@@ -22,6 +22,7 @@ import {
   AbandonTaskWorkflow,
   CancelTaskWorkflow,
   DispatchQueuedTasksWorkflow,
+  DeleteTaskWorkflow,
   ExecutionCapacityGate,
   ReleaseTaskWorkspaceWorkflow,
   ReconcileExecutionsWorkflow,
@@ -61,8 +62,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const createTask = new CreateTaskHandler(repository, clock, new CryptoIdGenerator());
   const reviseTask = new ReviseTaskHandler(repository, clock);
   const lifecycle = new TaskLifecycleService(repository, clock);
+  const dependencyRepository = new MementoTaskDependencyRepository(context.workspaceState);
   const dependencies = new TaskDependencyService(
-    new MementoTaskDependencyRepository(context.workspaceState), repository
+    dependencyRepository, repository
   );
   const tree = new TaskTreeProvider(repository, {
     error: (message, error) => {
@@ -94,11 +96,13 @@ export function activate(context: vscode.ExtensionContext): void {
   const runtimePreflight = new RuntimePreflight(commandRunner);
   const gitWorkspaces = new GitWorkspaceAdapter(commandRunner);
   const capacity = new ExecutionCapacityGate();
+  const activityRepository = new MementoActivityRepository(context.workspaceState);
   const activity = new ActivityService(
-    new MementoActivityRepository(context.workspaceState), clock, ids
+    activityRepository, clock, ids
   );
+  const approvalRepository = new MementoApprovalRepository(context.workspaceState);
   const approvals = new ApprovalService(
-    new MementoApprovalRepository(context.workspaceState), clock, ids
+    approvalRepository, clock, ids
   );
   const taskDetailQuery = new TaskDetailQuery(lifecycle, dependencies, executions, activity);
   const detailCommands: Readonly<Record<TaskDetailAction, string>> = {
@@ -112,7 +116,8 @@ export function activate(context: vscode.ExtensionContext): void {
     changes: "amazingMultiCodex.showChanges",
     integrate: "amazingMultiCodex.integrateTask",
     recoverIntegration: "amazingMultiCodex.recoverIntegration",
-    release: "amazingMultiCodex.releaseWorkspace"
+    release: "amazingMultiCodex.releaseWorkspace",
+    delete: "amazingMultiCodex.deleteTask"
   };
   const taskDetails = new TaskDetailPanelManager(
     async taskId => {
@@ -513,18 +518,20 @@ export function activate(context: vscode.ExtensionContext): void {
       await taskDetails.show(task.id);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.cancelTask", async (task?: TaskProps) => {
-      task = await selectTask(task, candidate => ["running", "awaitingApproval"].includes(candidate.status), "Cancel a running task");
+      task = await selectTask(task, candidate => ["queued", "running", "awaitingApproval"].includes(candidate.status), "Cancel a queued or running task");
       if (!task) return;
       const confirmed = await vscode.window.showWarningMessage(
-        `Cancel MultiCodex task '${task.title}'?${codex.current() ? "" : " Codex is disconnected, so only local execution state will be abandoned."}`,
+        `Cancel MultiCodex task '${task.title}'?${task.status === "queued" || codex.current() ? "" : " Codex is disconnected, so only local execution state will be abandoned."}`,
         { modal: true },
         "Cancel Task"
       );
       if (confirmed !== "Cancel Task") return;
       const agent = codex.current();
-      const cancelled = agent
-        ? await new CancelTaskWorkflow(lifecycle, agent, executions, clock).execute(task.id)
-        : await new AbandonTaskWorkflow(lifecycle, executions, clock).execute(task.id);
+      const cancelled = task.status === "queued"
+        ? await lifecycle.transition(task.id, "cancelled", "user-cancelled")
+        : agent
+          ? await new CancelTaskWorkflow(lifecycle, agent, executions, clock).execute(task.id)
+          : await new AbandonTaskWorkflow(lifecycle, executions, clock).execute(task.id);
       tree.refresh();
       if (!cancelled.ok) void vscode.window.showErrorMessage(cancelled.error.message);
       else {
@@ -790,6 +797,28 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       void vscode.window.showInformationMessage(`Released worktree for: ${task.title}`);
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.deleteTask", async (task?: TaskProps) => {
+      task = await selectTask(task, candidate => [
+        "draft", "readyForReview", "completed", "blocked", "failed", "cancelled", "deleting"
+      ].includes(candidate.status), "Delete a stopped task");
+      if (!task) return;
+      const confirmed = await vscode.window.showWarningMessage(
+        `Permanently delete '${task.title}', its MultiCodex history, and its worktree? Uncommitted worktree changes will be discarded; its Git branch is retained.`,
+        { modal: true }, "Delete Task"
+      );
+      if (confirmed !== "Delete Task") return;
+      const deleted = await new DeleteTaskWorkflow(
+        repository, lifecycle, dependencyRepository, executions, approvalRepository, activityRepository, gitWorkspaces
+      ).execute(task.id, true);
+      if (!deleted.ok) {
+        void vscode.window.showErrorMessage(deleted.error.message);
+        return;
+      }
+      connectedTasks.delete(task.id);
+      tree.refresh();
+      await taskDetails.refresh(task.id);
+      void vscode.window.showInformationMessage(`Deleted MultiCodex task: ${task.title}`);
     })
   );
 

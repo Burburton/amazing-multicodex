@@ -24,6 +24,11 @@ export class InMemoryApprovalRepository implements ApprovalRepository {
     this.records.set(snapshot.id, snapshot);
     return ok(undefined);
   }
+
+  async deleteByTask(taskId: TaskId): Promise<Result<void>> {
+    for (const [id, record] of this.records) if (record.taskId === taskId) this.records.delete(id);
+    return ok(undefined);
+  }
 }
 
 function conflict(id: ApprovalId, expected: number, actual: number): AppError {
@@ -35,4 +40,3 @@ function conflict(id: ApprovalId, expected: number, actual: number): AppError {
     context: { id, expected: String(expected), actual: String(actual) }
   };
 }
-

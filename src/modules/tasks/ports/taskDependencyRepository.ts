@@ -11,3 +11,6 @@ export interface TaskDependencyRepository {
   replace(dependencies: readonly TaskDependency[]): Promise<Result<void>>;
 }
 
+export interface TaskDependencyDeletionRepository {
+  deleteByTask(taskId: TaskId): Promise<Result<void>>;
+}

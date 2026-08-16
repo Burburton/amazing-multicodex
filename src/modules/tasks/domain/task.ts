@@ -15,7 +15,8 @@ export type TaskStatus =
   | "completed"
   | "blocked"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "deleting";
 
 export type TaskPriority = "low" | "normal" | "high" | "urgent";
 
@@ -50,18 +51,19 @@ export interface ReviseTaskProps {
 }
 
 const transitions: Readonly<Record<TaskStatus, readonly TaskStatus[]>> = {
-  draft: ["queued", "cancelled"],
+  draft: ["queued", "cancelled", "deleting"],
   queued: ["preparing", "cancelled"],
   preparing: ["running", "blocked", "failed", "cancelled"],
   running: ["awaitingApproval", "validating", "blocked", "failed", "cancelled"],
   awaitingApproval: ["running", "blocked", "failed", "cancelled"],
   validating: ["readyForReview", "running", "blocked", "failed", "cancelled"],
-  readyForReview: ["integrating", "running", "cancelled"],
+  readyForReview: ["integrating", "running", "cancelled", "deleting"],
   integrating: ["completed", "blocked", "failed", "cancelled"],
-  completed: [],
-  blocked: ["queued", "readyForReview", "cancelled"],
-  failed: ["queued", "cancelled"],
-  cancelled: ["queued"]
+  completed: ["deleting"],
+  blocked: ["queued", "readyForReview", "cancelled", "deleting"],
+  failed: ["queued", "cancelled", "deleting"],
+  cancelled: ["queued", "deleting"],
+  deleting: []
 };
 
 const MAX_DESCRIPTION_CHARACTERS = 20_000;

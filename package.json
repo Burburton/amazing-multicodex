@@ -52,7 +52,8 @@
     "onCommand:amazingMultiCodex.recoverIntegration",
     "onCommand:amazingMultiCodex.addDependency",
     "onCommand:amazingMultiCodex.removeDependency",
-    "onCommand:amazingMultiCodex.releaseWorkspace"
+    "onCommand:amazingMultiCodex.releaseWorkspace",
+    "onCommand:amazingMultiCodex.deleteTask"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -258,6 +259,11 @@
         "command": "amazingMultiCodex.releaseWorkspace",
         "title": "MultiCodex: Release Worktree",
         "icon": "$(trash)"
+      },
+      {
+        "command": "amazingMultiCodex.deleteTask",
+        "title": "MultiCodex: Delete Task",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -321,7 +327,7 @@
         },
         {
           "command": "amazingMultiCodex.cancelTask",
-          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.running || viewItem == multicodexTask.awaitingApproval)",
+          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.queued || viewItem == multicodexTask.running || viewItem == multicodexTask.awaitingApproval)",
           "group": "inline"
         },
         {
@@ -358,6 +364,11 @@
           "command": "amazingMultiCodex.releaseWorkspace",
           "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.completed || viewItem == multicodexTask.cancelled)",
           "group": "navigation"
+        },
+        {
+          "command": "amazingMultiCodex.deleteTask",
+          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.draft || viewItem == multicodexTask.readyForReview || viewItem == multicodexTask.completed || viewItem == multicodexTask.failed || viewItem == multicodexTask.cancelled || viewItem == multicodexTask.blocked || viewItem == multicodexTask.blocked.integration || viewItem == multicodexTask.deleting)",
+          "group": "navigation@99"
         }
       ]
     }
