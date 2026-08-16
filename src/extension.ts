@@ -43,7 +43,7 @@ import {
 import { SystemClock } from "./shared/core/clock";
 import { CryptoIdGenerator } from "./shared/core/idGenerator";
 import { TaskTreeProvider } from "./ui/taskTreeProvider";
-import { showTaskDetailPanel } from "./ui/taskDetailPanel";
+import { showTaskDetailPanel, TaskDetailAction } from "./ui/taskDetailPanel";
 
 export function activate(context: vscode.ExtensionContext): void {
   const repository = new MementoTaskRepository(context.workspaceState);
@@ -288,7 +288,19 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showErrorMessage(detail.error.message);
         return;
       }
-      showTaskDetailPanel(detail.value);
+      const commands: Readonly<Record<TaskDetailAction, string>> = {
+        queue: "amazingMultiCodex.queueTask",
+        start: "amazingMultiCodex.startTask",
+        resume: "amazingMultiCodex.resumeTask",
+        cancel: "amazingMultiCodex.cancelTask",
+        validate: "amazingMultiCodex.validateTask",
+        changes: "amazingMultiCodex.showChanges",
+        integrate: "amazingMultiCodex.integrateTask",
+        release: "amazingMultiCodex.releaseWorkspace"
+      };
+      showTaskDetailPanel(detail.value, action => {
+        void vscode.commands.executeCommand(commands[action], detail.value.task);
+      });
     }),
     vscode.commands.registerCommand("amazingMultiCodex.cancelTask", async (task?: TaskProps) => {
       if (!task) {
