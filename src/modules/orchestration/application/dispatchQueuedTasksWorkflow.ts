@@ -27,18 +27,19 @@ export class DispatchQueuedTasksWorkflow {
     if (!active.ok) return active;
 
     const queued = listed.value.filter(task => task.snapshot().status === "queued");
-    const candidates = [];
-    for (const task of queued) {
+    const readiness = await Promise.all(queued.map(async task => {
       const snapshot = task.snapshot();
       const ready = await this.dependencies.prerequisitesSatisfied(snapshot.id);
-      if (!ready.ok) return err(ready.error);
-      candidates.push({
+      return ready.ok ? ok({
         taskId: snapshot.id,
         priority: snapshot.priority,
         queuedAt: snapshot.updatedAt,
         prerequisitesSatisfied: ready.value
-      });
-    }
+      }) : ready;
+    }));
+    const failed = readiness.find(result => !result.ok);
+    if (failed && !failed.ok) return err(failed.error);
+    const candidates = readiness.flatMap(result => result.ok ? [result.value] : []);
 
     const selected = this.scheduler.select(candidates, active.value.length, command.concurrencyLimit);
     const started: TaskId[] = [];
