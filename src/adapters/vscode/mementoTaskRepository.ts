@@ -9,6 +9,7 @@ interface StoredTask extends Omit<TaskProps, "createdAt" | "updatedAt"> {
 }
 
 const STORAGE_KEY = "amazingMultiCodex.tasks.v2";
+const MAX_TASKS = 10_000;
 
 export class MementoTaskRepository implements TaskRepository {
   private readonly writes = new AsyncOperationQueue();
@@ -37,6 +38,7 @@ export class MementoTaskRepository implements TaskRepository {
     const index = records.value.findIndex(record => record.id === snapshot.id);
     const actual = index === -1 ? -1 : records.value[index].version;
     if (actual !== expectedVersion) return err(conflict(snapshot.id, expectedVersion, actual));
+    if (index === -1 && records.value.length >= MAX_TASKS) return err(capacityExceeded());
     const stored = toStored(snapshot);
     if (!isStoredTask(stored)) return err(invalidTask());
     if (index === -1) records.value.unshift(stored);
@@ -58,7 +60,9 @@ export class MementoTaskRepository implements TaskRepository {
   private records(): Result<StoredTask[]> {
     try {
       const stored = this.state.get<unknown>(STORAGE_KEY, []);
-      if (!Array.isArray(stored) || !stored.every(isStoredTask) || !hasUniqueIds(stored)) return err(corruptState());
+      if (!Array.isArray(stored) || stored.length > MAX_TASKS || !stored.every(isStoredTask) || !hasUniqueIds(stored)) {
+        return err(corruptState());
+      }
       return ok([...stored]);
     } catch (cause) {
       return err(persistenceFailure(cause));
@@ -121,6 +125,13 @@ function invalidTask(): AppError {
   return {
     code: "task.record-invalid", category: "validation",
     message: "Task fields exceed safe persistence limits.", retryable: false
+  };
+}
+
+function capacityExceeded(): AppError {
+  return {
+    code: "task.capacity-exceeded", category: "conflict",
+    message: `No more than ${MAX_TASKS} tasks can be stored.`, retryable: false
   };
 }
 
