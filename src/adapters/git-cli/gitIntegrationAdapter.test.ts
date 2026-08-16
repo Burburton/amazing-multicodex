@@ -74,3 +74,38 @@ test("rejects a workspace whose HEAD still equals its immutable base", async () 
   if (!result.ok) assert.equal(result.error.code, "integration.no-changes");
   assert.equal(commands.calls.some(call => call.args[0] === "merge"), false);
 });
+
+test("restores the clean target after a merge failure", async () => {
+  const commands = new Commands();
+  const failed = { ...success("", 1), stderr: "conflict" };
+  commands.results.push(success(), success(), success("", 0), success("source-sha\n"), failed, success());
+  const result = await new GitIntegrationAdapter(commands).integrate({
+    workspace: {
+      id: "workspace" as WorkspaceId, taskId: "task" as TaskId,
+      repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/task",
+      branch: "multicodex/task", baseRef: "base"
+    },
+    targetRepositoryRoot: "/repo", strategy: "merge", commitMessage: "Integrate task"
+  });
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "integration.git-failed");
+  assert.deepEqual(commands.calls.at(-1)?.args, ["reset", "--merge", "HEAD"]);
+});
+
+test("reports when a failed integration cannot restore the target", async () => {
+  const commands = new Commands();
+  const failed = { ...success("", 1), stderr: "conflict" };
+  commands.results.push(success(), success(), success("", 0), success("source-sha\n"), failed, failed);
+  const result = await new GitIntegrationAdapter(commands).integrate({
+    workspace: {
+      id: "workspace" as WorkspaceId, taskId: "task" as TaskId,
+      repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/task",
+      branch: "multicodex/task", baseRef: "base"
+    },
+    targetRepositoryRoot: "/repo", strategy: "squash", commitMessage: "Integrate task"
+  });
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "integration.rollback-failed");
+});

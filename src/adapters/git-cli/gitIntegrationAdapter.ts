@@ -33,12 +33,12 @@ export class GitIntegrationAdapter implements IntegrationPort {
       const merged = await this.git(input.targetRepositoryRoot, [
         "merge", "--no-ff", sourceCommit, "-m", input.commitMessage
       ]);
-      if (!merged.ok) return merged;
+      if (!merged.ok) return this.rollback(input.targetRepositoryRoot, merged.error);
     } else {
       const squashed = await this.git(input.targetRepositoryRoot, ["merge", "--squash", sourceCommit]);
-      if (!squashed.ok) return squashed;
+      if (!squashed.ok) return this.rollback(input.targetRepositoryRoot, squashed.error);
       const committed = await this.git(input.targetRepositoryRoot, ["commit", "-m", input.commitMessage]);
-      if (!committed.ok) return committed;
+      if (!committed.ok) return this.rollback(input.targetRepositoryRoot, committed.error);
     }
     const target = await this.git(input.targetRepositoryRoot, ["rev-parse", "HEAD"]);
     if (!target.ok) return target;
@@ -47,6 +47,17 @@ export class GitIntegrationAdapter implements IntegrationPort {
       targetCommit: target.value.stdout.trim(),
       strategy: input.strategy
     });
+  }
+
+  private async rollback<T>(repositoryRoot: string, integrationFailure: AppError): Promise<Result<T>> {
+    const restored = await this.git(repositoryRoot, ["reset", "--merge", "HEAD"]);
+    if (restored.ok) return err(integrationFailure);
+    return err(integrationError(
+      "integration.rollback-failed",
+      "Integration failed and the target repository could not be restored automatically.",
+      false,
+      { integrationFailure, rollbackFailure: restored.error }
+    ));
   }
 
   private async git(

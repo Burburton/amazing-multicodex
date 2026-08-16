@@ -60,8 +60,47 @@ test("real Git contract covers worktree diff and reviewed merge integration", as
   }
 });
 
+test("real Git contract restores a clean target after an integration conflict", async () => {
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "multicodex-git-conflict-"));
+  const repositoryRoot = path.join(temporaryRoot, "repository");
+  const worktreeRoot = path.join(temporaryRoot, "worktrees");
+  fs.mkdirSync(repositoryRoot);
+  fs.mkdirSync(worktreeRoot);
+  const commands = new NodeCommandRunner();
+  try {
+    await git(commands, repositoryRoot, ["init", "-b", "main"]);
+    await git(commands, repositoryRoot, ["config", "user.name", "MultiCodex Test"]);
+    await git(commands, repositoryRoot, ["config", "user.email", "multicodex@example.invalid"]);
+    fs.writeFileSync(path.join(repositoryRoot, "conflict.txt"), "base\n");
+    await git(commands, repositoryRoot, ["add", "conflict.txt"]);
+    await git(commands, repositoryRoot, ["commit", "-m", "initial"]);
+    const prepared = await new GitWorkspaceAdapter(commands).prepare({
+      id: "workspace-conflict" as WorkspaceId,
+      taskId: "task-conflict" as TaskId,
+      repositoryRoot, worktreeRoot, branch: "multicodex/conflict", baseRef: "HEAD"
+    });
+    assert.equal(prepared.ok, true);
+    if (!prepared.ok) return;
+    fs.writeFileSync(path.join(prepared.value.path, "conflict.txt"), "task\n");
+    fs.writeFileSync(path.join(repositoryRoot, "conflict.txt"), "target\n");
+    await git(commands, repositoryRoot, ["add", "conflict.txt"]);
+    await git(commands, repositoryRoot, ["commit", "-m", "target change"]);
+
+    const integrated = await new GitIntegrationAdapter(commands).integrate({
+      workspace: prepared.value, targetRepositoryRoot: repositoryRoot,
+      strategy: "merge", commitMessage: "conflicting task"
+    });
+
+    assert.equal(integrated.ok, false);
+    const status = await commands.run({ executable: "git", args: ["status", "--porcelain=v1"], cwd: repositoryRoot });
+    assert.equal(status.stdout, "");
+    assert.equal(fs.readFileSync(path.join(repositoryRoot, "conflict.txt"), "utf8"), "target\n");
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
 async function git(commands: NodeCommandRunner, cwd: string, args: readonly string[]): Promise<void> {
   const result = await commands.run({ executable: "git", args, cwd });
   assert.equal(result.exitCode, 0, result.stderr);
 }
-
