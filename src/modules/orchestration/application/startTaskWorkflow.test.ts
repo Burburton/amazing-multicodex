@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Clock } from "../../../shared/core/clock";
 import { IdGenerator } from "../../../shared/core/idGenerator";
-import { Result, ok } from "../../../shared/core/result";
+import { Result, err, ok } from "../../../shared/core/result";
 import {
   AgentApprovalHandler,
   AgentEventListener,
@@ -52,13 +52,14 @@ class FakeAgent implements AgentRuntimePort {
 }
 class FakeWorkspaces implements WorkspacePort {
   prepared?: PrepareWorkspaceInput;
+  released?: ReleaseWorkspaceInput;
   async prepare(input: PrepareWorkspaceInput): Promise<Result<WorkspaceRef>> {
     this.prepared = input;
     return ok({ ...input, path: `${input.worktreeRoot}/${input.id}` });
   }
   inspect(_workspace: WorkspaceRef): Promise<Result<WorkspaceSnapshot>> { throw new Error("unused"); }
   diff(_workspace: WorkspaceRef): Promise<Result<ChangeSet>> { throw new Error("unused"); }
-  release(_input: ReleaseWorkspaceInput): Promise<Result<void>> { throw new Error("unused"); }
+  async release(input: ReleaseWorkspaceInput): Promise<Result<void>> { this.released = input; return ok(undefined); }
 }
 
 test("coordinates queued task, workspace, agent, and execution record", async () => {
@@ -133,4 +134,38 @@ test("marks a prepared execution failed when Codex cannot start", async () => {
   assert.equal(active.ok && active.value.length, 0);
   const task = await tasks.findById("task-failed" as TaskId);
   assert.equal(task.ok && task.value?.snapshot().status, "blocked");
+});
+
+test("releases a newly prepared worktree when execution persistence fails", async () => {
+  const clock = new FixedClock();
+  const tasks = new InMemoryTaskRepository();
+  const created = Task.create({ id: "task-failed" as TaskId, title: "Failure", now: clock.now() });
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  created.value.transition("queued", clock.now());
+  await tasks.save(created.value, -1);
+  const workspaces = new FakeWorkspaces();
+  const persistenceError = {
+    code: "execution.persistence-failed", category: "unavailable" as const,
+    message: "failed", retryable: true
+  };
+  const executions = {
+    findActiveByTask: async () => ok(undefined),
+    listActive: async () => ok([]),
+    save: async () => err(persistenceError)
+  };
+  const workflow = new StartTaskWorkflow(
+    new TaskLifecycleService(tasks, clock), workspaces, new FakeAgent(), executions as never, clock,
+    new SequenceIds(), new ExecutionCapacityGate(),
+    new TaskDependencyService(new InMemoryTaskDependencyRepository(), tasks)
+  );
+
+  const result = await workflow.execute({
+    taskId: "task-failed" as TaskId, repositoryRoot: "/repo", worktreeRoot: "/worktrees",
+    baseRef: "main", concurrencyLimit: 1
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(workspaces.released?.force, false);
+  assert.equal(workspaces.released?.workspace.id, "id-2");
 });

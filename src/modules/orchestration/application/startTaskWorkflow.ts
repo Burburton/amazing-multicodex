@@ -81,6 +81,7 @@ export class StartTaskWorkflow {
     };
     const saved = await this.executions.save(execution, -1);
     if (!saved.ok) {
+      await this.workspaces.release({ workspace: prepared.value, force: false });
       await this.tasks.transition(command.taskId, "blocked", saved.error.code);
       return saved;
     }
