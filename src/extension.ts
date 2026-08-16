@@ -3,8 +3,11 @@ import { CodexProcessSupervisor } from "./adapters/codex-app-server/codexProcess
 import { GitWorkspaceAdapter } from "./adapters/git-cli/gitWorkspaceAdapter";
 import { NodeCommandRunner } from "./adapters/process/nodeCommandRunner";
 import { NodeProcessFactory } from "./adapters/process/nodeProcessFactory";
+import { MementoActivityRepository } from "./adapters/vscode/mementoActivityRepository";
 import { MementoExecutionRepository } from "./adapters/vscode/mementoExecutionRepository";
 import { MementoTaskRepository } from "./adapters/vscode/mementoTaskRepository";
+import { AgentActivityBridge } from "./host/agentActivityBridge";
+import { ActivityService } from "./modules/activity/public";
 import { AgentEventCoordinator, ResumeTaskWorkflow, StartTaskWorkflow } from "./modules/orchestration/public";
 import { CreateTaskHandler, TaskLifecycleService, TaskProps } from "./modules/tasks/public";
 import { SystemClock } from "./shared/core/clock";
@@ -25,12 +28,17 @@ export function activate(context: vscode.ExtensionContext): void {
     processError: error => console.error("Codex App Server error", error)
   });
   const executions = new MementoExecutionRepository(context.workspaceState);
+  const activity = new ActivityService(
+    new MementoActivityRepository(context.workspaceState), clock, ids
+  );
   let coordinator: AgentEventCoordinator | undefined;
+  let activityBridge: AgentActivityBridge | undefined;
 
   context.subscriptions.push(
     tree,
     { dispose: () => {
       coordinator?.stop();
+      activityBridge?.stop();
       codex.stop();
     } },
     vscode.window.registerTreeDataProvider("amazingMultiCodex.tasks", tree),
@@ -91,6 +99,11 @@ export function activate(context: vscode.ExtensionContext): void {
             taskChanged: () => tree.refresh()
           });
           coordinator.start();
+          activityBridge?.stop();
+          activityBridge = new AgentActivityBridge(agent, executions, activity, 32_000, {
+            error: (message, error) => console.error(message, error)
+          });
+          activityBridge.start();
           const workflow = new StartTaskWorkflow(
             lifecycle,
             new GitWorkspaceAdapter(new NodeCommandRunner()),
@@ -135,6 +148,11 @@ export function activate(context: vscode.ExtensionContext): void {
           taskChanged: () => tree.refresh()
         });
         coordinator.start();
+        activityBridge?.stop();
+        activityBridge = new AgentActivityBridge(agent, executions, activity, 32_000, {
+          error: (message, error) => console.error(message, error)
+        });
+        activityBridge.start();
         const resumed = await new ResumeTaskWorkflow(lifecycle, agent, executions, clock)
           .execute({ taskId: task.id });
         if (!resumed.ok) {
@@ -146,6 +164,26 @@ export function activate(context: vscode.ExtensionContext): void {
         const message = cause instanceof Error ? cause.message : "Unknown resume error.";
         void vscode.window.showErrorMessage(`Could not resume MultiCodex task: ${message}`);
       }
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.showActivity", async (task?: TaskProps) => {
+      if (!task) {
+        void vscode.window.showErrorMessage("Select a MultiCodex task to view its activity.");
+        return;
+      }
+      const records = await activity.list(task.id);
+      if (!records.ok) {
+        void vscode.window.showErrorMessage(records.error.message);
+        return;
+      }
+      if (records.value.length === 0) {
+        void vscode.window.showInformationMessage("No activity has been recorded for this task yet.");
+        return;
+      }
+      await vscode.window.showQuickPick(records.value.map(record => ({
+        label: record.summary,
+        description: record.kind,
+        detail: record.detail
+      })), { title: `Activity: ${task.title}`, matchOnDetail: true });
     })
   );
 }

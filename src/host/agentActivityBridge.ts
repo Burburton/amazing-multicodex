@@ -1,0 +1,63 @@
+import { AgentRuntimeEvent, AgentRuntimePort } from "../modules/agents/public";
+import { ActivityService } from "../modules/activity/public";
+import { ExecutionRepository } from "../modules/orchestration/public";
+
+export interface ActivityBridgeDiagnostics {
+  readonly error: (message: string, cause?: unknown) => void;
+}
+
+export class AgentActivityBridge {
+  private readonly messageBuffers = new Map<string, string>();
+  private unsubscribe?: () => void;
+
+  constructor(
+    private readonly agents: AgentRuntimePort,
+    private readonly executions: ExecutionRepository,
+    private readonly activity: ActivityService,
+    private readonly maxMessageCharacters = 32_000,
+    private readonly diagnostics: ActivityBridgeDiagnostics = { error: () => undefined }
+  ) {}
+
+  start(): void {
+    if (!this.unsubscribe) this.unsubscribe = this.agents.subscribe(event => { void this.handle(event); });
+  }
+
+  stop(): void {
+    this.unsubscribe?.();
+    this.unsubscribe = undefined;
+    this.messageBuffers.clear();
+  }
+
+  private async handle(event: AgentRuntimeEvent): Promise<void> {
+    const key = `${event.threadId}:${event.turnId}`;
+    if (event.type === "agentMessageDelta") {
+      const current = this.messageBuffers.get(key) ?? "";
+      this.messageBuffers.set(key, (current + event.delta).slice(-this.maxMessageCharacters));
+      return;
+    }
+    if (event.type !== "turnCompleted") return;
+    const execution = await this.executions.findByAgent(event.threadId, event.turnId);
+    if (!execution.ok || !execution.value) {
+      this.diagnostics.error("Could not associate Codex activity with a task.", execution.ok ? undefined : execution.error);
+      return;
+    }
+    const message = this.messageBuffers.get(key);
+    this.messageBuffers.delete(key);
+    if (message) {
+      const recorded = await this.activity.record({
+        taskId: execution.value.taskId,
+        kind: "agentMessage",
+        summary: "Codex response",
+        detail: message
+      });
+      if (!recorded.ok) this.diagnostics.error("Could not persist Codex response activity.", recorded.error);
+    }
+    const terminal = await this.activity.record({
+      taskId: execution.value.taskId,
+      kind: event.status === "completed" ? "lifecycle" : "error",
+      summary: `Codex turn ${event.status}`
+    });
+    if (!terminal.ok) this.diagnostics.error("Could not persist Codex terminal activity.", terminal.error);
+  }
+}
+

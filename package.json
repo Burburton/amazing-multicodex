@@ -20,7 +20,8 @@
     "onView:amazingMultiCodex.tasks",
     "onCommand:amazingMultiCodex.createTask",
     "onCommand:amazingMultiCodex.startTask",
-    "onCommand:amazingMultiCodex.resumeTask"
+    "onCommand:amazingMultiCodex.resumeTask",
+    "onCommand:amazingMultiCodex.showActivity"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -51,6 +52,11 @@
         "command": "amazingMultiCodex.resumeTask",
         "title": "MultiCodex: Resume Task",
         "icon": "$(debug-continue)"
+      },
+      {
+        "command": "amazingMultiCodex.showActivity",
+        "title": "MultiCodex: Show Task Activity",
+        "icon": "$(history)"
       }
     ],
     "menus": {
@@ -76,6 +82,11 @@
           "command": "amazingMultiCodex.resumeTask",
           "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.running",
           "group": "inline"
+        },
+        {
+          "command": "amazingMultiCodex.showActivity",
+          "when": "view == amazingMultiCodex.tasks",
+          "group": "navigation"
         }
       ]
     }
