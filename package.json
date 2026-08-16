@@ -9,6 +9,10 @@
     "type": "git",
     "url": "https://github.com/Burburton/amazing-multicodex.git"
   },
+  "homepage": "https://github.com/Burburton/amazing-multicodex#readme",
+  "bugs": {
+    "url": "https://github.com/Burburton/amazing-multicodex/issues"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -16,6 +20,18 @@
     "Other",
     "Machine Learning"
   ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "MultiCodex creates Git worktrees and runs configured validation commands."
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
   "activationEvents": [
     "onView:amazingMultiCodex.tasks",
     "onCommand:amazingMultiCodex.createTask",
