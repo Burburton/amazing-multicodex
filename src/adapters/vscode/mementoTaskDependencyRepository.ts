@@ -1,6 +1,6 @@
 import { AppError, Result, err, ok } from "../../shared/core/result";
 import { KeyValueState } from "../../shared/ports/keyValueState";
-import { TaskDependency, TaskDependencyRepository } from "../../modules/tasks/public";
+import { TaskDependency, TaskDependencyGraph, TaskDependencyRepository } from "../../modules/tasks/public";
 
 const STORAGE_KEY = "amazingMultiCodex.dependencies.v1";
 
@@ -12,18 +12,36 @@ export class MementoTaskDependencyRepository implements TaskDependencyRepository
       if (!Array.isArray(stored) || !stored.every(isDependency)) {
         return err(corruptState());
       }
-      return ok(stored.map(item => ({ taskId: item.taskId, prerequisiteId: item.prerequisiteId })));
+      const dependencies = stored.map(item => ({ taskId: item.taskId, prerequisiteId: item.prerequisiteId }));
+      if (!isValidGraph(dependencies)) return err(corruptState());
+      return ok(dependencies);
     } catch (cause) {
       return err(persistenceError(cause));
     }
   }
   async replace(dependencies: readonly TaskDependency[]): Promise<Result<void>> {
+    if (!isValidGraph(dependencies)) return err(invalidGraph());
     try {
       await this.state.update(STORAGE_KEY, [...dependencies]);
       return ok(undefined);
     } catch (cause) {
       return err(persistenceError(cause));
     }
+  }
+}
+
+function isValidGraph(dependencies: readonly TaskDependency[]): boolean {
+  const keys = new Set<string>();
+  for (const dependency of dependencies) {
+    const key = `${dependency.taskId}\0${dependency.prerequisiteId}`;
+    if (keys.has(key)) return false;
+    keys.add(key);
+  }
+  try {
+    new TaskDependencyGraph(dependencies.map(edge => [edge.taskId, edge.prerequisiteId]));
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -41,6 +59,15 @@ function corruptState(): AppError {
     code: "task.dependency-state-invalid",
     category: "internal",
     message: "Stored task dependencies are invalid.",
+    retryable: false
+  };
+}
+
+function invalidGraph(): AppError {
+  return {
+    code: "task.dependency-graph-invalid",
+    category: "validation",
+    message: "Task dependencies must be unique and acyclic.",
     retryable: false
   };
 }

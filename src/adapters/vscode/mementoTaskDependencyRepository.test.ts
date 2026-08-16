@@ -28,3 +28,22 @@ test("reports invalid persisted dependency state", async () => {
   assert.equal(listed.ok, false);
   if (!listed.ok) assert.equal(listed.error.code, "task.dependency-state-invalid");
 });
+
+test("rejects a structurally valid but cyclic persisted graph", async () => {
+  const repository = new MementoTaskDependencyRepository(new FakeState([
+    { taskId: "a", prerequisiteId: "b" },
+    { taskId: "b", prerequisiteId: "a" }
+  ]));
+  const listed = await repository.list();
+  assert.equal(listed.ok, false);
+  if (!listed.ok) assert.equal(listed.error.code, "task.dependency-state-invalid");
+});
+
+test("refuses to persist invalid dependency graphs", async () => {
+  const repository = new MementoTaskDependencyRepository(new FakeState());
+  const replaced = await repository.replace([
+    { taskId: "task" as TaskId, prerequisiteId: "task" as TaskId }
+  ]);
+  assert.equal(replaced.ok, false);
+  if (!replaced.ok) assert.equal(replaced.error.code, "task.dependency-graph-invalid");
+});
