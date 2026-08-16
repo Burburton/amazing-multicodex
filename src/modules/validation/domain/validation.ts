@@ -43,14 +43,27 @@ export interface ValidationRun {
   readonly completedAt: Date;
 }
 
+const MAX_CHECKS = 50;
+const MAX_LABEL_CHARACTERS = 200;
+const MAX_EXECUTABLE_CHARACTERS = 4_096;
+const MAX_ARGUMENTS = 200;
+const MAX_ARGUMENT_CHARACTERS = 10_000;
+
 export function validateProfile(profile: ValidationProfile): Result<ValidationProfile> {
   if (profile.checks.length === 0) {
     return err(validationError("validation.empty-profile", "Validation profile must contain a check."));
+  }
+  if (profile.checks.length > MAX_CHECKS) {
+    return err(validationError("validation.too-many-checks", `Validation profiles cannot exceed ${MAX_CHECKS} checks.`));
   }
   const ids = new Set<ValidationCheckId>();
   for (const check of profile.checks) {
     if (!check.label.trim() || !check.executable.trim()) {
       return err(validationError("validation.invalid-check", "Validation checks require a label and executable."));
+    }
+    if (check.label.length > MAX_LABEL_CHARACTERS || check.executable.length > MAX_EXECUTABLE_CHARACTERS
+      || check.args.length > MAX_ARGUMENTS || check.args.some(argument => argument.length > MAX_ARGUMENT_CHARACTERS)) {
+      return err(validationError("validation.check-too-large", "Validation check labels, executables, or arguments exceed safe limits."));
     }
     if (ids.has(check.id)) {
       return err(validationError("validation.duplicate-check", "Validation check IDs must be unique."));
@@ -63,4 +76,3 @@ export function validateProfile(profile: ValidationProfile): Result<ValidationPr
 function validationError(code: string, message: string): AppError {
   return { code, category: "validation", message, retryable: false };
 }
-

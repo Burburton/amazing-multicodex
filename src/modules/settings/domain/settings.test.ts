@@ -49,3 +49,19 @@ test("returns typed errors for malformed runtime configuration shapes", () => {
   assert.equal(commands.ok, false);
   if (!commands.ok) assert.equal(commands.error.code, "settings.validation-commands");
 });
+
+test("bounds and normalizes configured validation commands", () => {
+  const normalized = parseSettings({
+    validationCommands: [{ label: " Test ", executable: " npm ", args: ["test"] }]
+  });
+  assert.equal(normalized.ok, true);
+  if (normalized.ok) {
+    assert.equal(normalized.value.validationCommands[0]?.label, "Test");
+    assert.equal(normalized.value.validationCommands[0]?.executable, "npm");
+  }
+  const oversized = parseSettings({
+    validationCommands: Array.from({ length: 51 }, () => ({ label: "Test", executable: "npm", args: ["test"] }))
+  });
+  assert.equal(oversized.ok, false);
+  if (!oversized.ok) assert.equal(oversized.error.code, "settings.validation-commands");
+});

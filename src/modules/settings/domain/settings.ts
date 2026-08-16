@@ -75,13 +75,19 @@ export function parseSettings(input: SettingsInput): Result<MultiCodexSettings> 
   if (!Number.isInteger(value.validationTimeoutMs) || value.validationTimeoutMs < 1_000 || value.validationTimeoutMs > 3_600_000) {
     return err(settingError("settings.validation-timeout", "Validation timeout must be between 1,000 and 3,600,000 ms."));
   }
-  if (value.validationCommands.length === 0 || !value.validationCommands.every(isValidationCommand)) {
-    return err(settingError("settings.validation-commands", "At least one valid validation command is required."));
+  if (value.validationCommands.length === 0 || value.validationCommands.length > 50
+    || !value.validationCommands.every(isValidationCommand)) {
+    return err(settingError("settings.validation-commands", "Provide between 1 and 50 validation commands within safe size limits."));
   }
   return ok({
     ...value,
     codexExecutable: value.codexExecutable.trim(),
-    baseRef
+    baseRef,
+    validationCommands: value.validationCommands.map(command => ({
+      label: command.label.trim(),
+      executable: command.executable.trim(),
+      args: [...command.args]
+    }))
   });
 }
 
@@ -89,8 +95,11 @@ function isValidationCommand(command: unknown): command is ValidationCommandSett
   if (!command || typeof command !== "object") return false;
   const value = command as Record<string, unknown>;
   return typeof value.label === "string" && value.label.trim().length > 0
+    && value.label.length <= 200
     && typeof value.executable === "string" && value.executable.trim().length > 0
-    && Array.isArray(value.args) && value.args.every(argument => typeof argument === "string");
+    && value.executable.length <= 4_096
+    && Array.isArray(value.args) && value.args.length <= 200
+    && value.args.every(argument => typeof argument === "string" && argument.length <= 10_000);
 }
 
 function settingError(code: string, message: string): AppError {
