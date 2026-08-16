@@ -8,6 +8,7 @@ import { MementoActivityRepository } from "./adapters/vscode/mementoActivityRepo
 import { MementoApprovalRepository } from "./adapters/vscode/mementoApprovalRepository";
 import { MementoExecutionRepository } from "./adapters/vscode/mementoExecutionRepository";
 import { MementoTaskRepository } from "./adapters/vscode/mementoTaskRepository";
+import { MementoTaskDependencyRepository } from "./adapters/vscode/mementoTaskDependencyRepository";
 import { AgentActivityBridge } from "./host/agentActivityBridge";
 import { ApprovalBridge } from "./host/approvalBridge";
 import { ActivityService } from "./modules/activity/public";
@@ -22,7 +23,12 @@ import {
   StartTaskWorkflow,
   ValidateTaskWorkflow
 } from "./modules/orchestration/public";
-import { CreateTaskHandler, TaskLifecycleService, TaskProps } from "./modules/tasks/public";
+import {
+  CreateTaskHandler,
+  TaskDependencyService,
+  TaskLifecycleService,
+  TaskProps
+} from "./modules/tasks/public";
 import {
   RunValidationHandler,
   ValidationCheckId,
@@ -37,6 +43,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const clock = new SystemClock();
   const createTask = new CreateTaskHandler(repository, clock, new CryptoIdGenerator());
   const lifecycle = new TaskLifecycleService(repository, clock);
+  const dependencies = new TaskDependencyService(
+    new MementoTaskDependencyRepository(context.workspaceState), repository
+  );
   const tree = new TaskTreeProvider(repository);
   const ids = new CryptoIdGenerator();
   const codex = new CodexProcessSupervisor(new NodeProcessFactory(), {
@@ -147,7 +156,8 @@ export function activate(context: vscode.ExtensionContext): void {
             executions,
             clock,
             ids,
-            capacity
+            capacity,
+            dependencies
           );
           const started = await workflow.execute({
             taskId: task.id,
@@ -363,6 +373,36 @@ export function activate(context: vscode.ExtensionContext): void {
         detail: integrated.value.targetCommit
       });
       void vscode.window.showInformationMessage(`Integrated MultiCodex task: ${task.title}`);
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.addDependency", async (task?: TaskProps) => {
+      if (!task) {
+        void vscode.window.showErrorMessage("Select a MultiCodex task to add a prerequisite.");
+        return;
+      }
+      const listed = await repository.list();
+      if (!listed.ok) {
+        void vscode.window.showErrorMessage(listed.error.message);
+        return;
+      }
+      const candidates = listed.value
+        .map(candidate => candidate.snapshot())
+        .filter(candidate => candidate.id !== task.id);
+      if (candidates.length === 0) {
+        void vscode.window.showInformationMessage("Create another task before adding a prerequisite.");
+        return;
+      }
+      const selected = await vscode.window.showQuickPick(candidates.map(candidate => ({
+        label: candidate.title,
+        description: candidate.status,
+        taskId: candidate.id
+      })), { title: `Prerequisite for: ${task.title}` });
+      if (!selected) return;
+      const added = await dependencies.add(task.id, selected.taskId);
+      if (!added.ok) {
+        void vscode.window.showErrorMessage(added.error.message);
+        return;
+      }
+      void vscode.window.showInformationMessage(`Added prerequisite '${selected.label}' to '${task.title}'.`);
     })
   );
 

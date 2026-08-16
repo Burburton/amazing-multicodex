@@ -14,7 +14,8 @@ import {
   StartExecutionInput
 } from "../../agents/public";
 import { InMemoryTaskRepository } from "../../tasks/adapters/inMemoryTaskRepository";
-import { Task, TaskId, TaskLifecycleService } from "../../tasks/public";
+import { InMemoryTaskDependencyRepository } from "../../tasks/adapters/inMemoryTaskDependencyRepository";
+import { Task, TaskDependencyService, TaskId, TaskLifecycleService } from "../../tasks/public";
 import {
   ChangeSet,
   PrepareWorkspaceInput,
@@ -75,7 +76,14 @@ test("coordinates queued task, workspace, agent, and execution record", async ()
   const agents = new FakeAgent();
   const executions = new InMemoryExecutionRepository();
   const workflow = new StartTaskWorkflow(
-    new TaskLifecycleService(tasks, clock), workspaces, agents, executions, clock, new SequenceIds(), new ExecutionCapacityGate()
+    new TaskLifecycleService(tasks, clock),
+    workspaces,
+    agents,
+    executions,
+    clock,
+    new SequenceIds(),
+    new ExecutionCapacityGate(),
+    new TaskDependencyService(new InMemoryTaskDependencyRepository(), tasks)
   );
   const result = await workflow.execute({
     taskId: "task-12345678" as TaskId,

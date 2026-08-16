@@ -25,7 +25,8 @@
     "onCommand:amazingMultiCodex.cancelTask",
     "onCommand:amazingMultiCodex.validateTask",
     "onCommand:amazingMultiCodex.showChanges",
-    "onCommand:amazingMultiCodex.integrateTask"
+    "onCommand:amazingMultiCodex.integrateTask",
+    "onCommand:amazingMultiCodex.addDependency"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -137,6 +138,11 @@
         "command": "amazingMultiCodex.integrateTask",
         "title": "MultiCodex: Integrate Task",
         "icon": "$(git-merge)"
+      },
+      {
+        "command": "amazingMultiCodex.addDependency",
+        "title": "MultiCodex: Add Prerequisite",
+        "icon": "$(references)"
       }
     ],
     "menus": {
@@ -187,6 +193,11 @@
           "command": "amazingMultiCodex.integrateTask",
           "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.readyForReview",
           "group": "inline"
+        },
+        {
+          "command": "amazingMultiCodex.addDependency",
+          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.draft || viewItem == multicodexTask.queued || viewItem == multicodexTask.blocked)",
+          "group": "navigation"
         }
       ]
     }

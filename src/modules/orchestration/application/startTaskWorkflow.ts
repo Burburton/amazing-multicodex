@@ -2,7 +2,7 @@ import { Clock } from "../../../shared/core/clock";
 import { IdGenerator } from "../../../shared/core/idGenerator";
 import { AppError, Result, err, ok } from "../../../shared/core/result";
 import { AgentRuntimePort } from "../../agents/public";
-import { TaskId, TaskLifecycleService } from "../../tasks/public";
+import { TaskDependencyService, TaskId, TaskLifecycleService } from "../../tasks/public";
 import { WorkspaceId, WorkspacePort, workspaceBranch } from "../../workspaces/public";
 import { ExecutionCapacityGate } from "../domain/executionCapacityGate";
 import { ExecutionRepository, TaskExecutionId, TaskExecutionRecord } from "../ports/executionRepository";
@@ -25,7 +25,8 @@ export class StartTaskWorkflow {
     private readonly executions: ExecutionRepository,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
-    private readonly capacity: ExecutionCapacityGate
+    private readonly capacity: ExecutionCapacityGate,
+    private readonly dependencies: TaskDependencyService
   ) {}
 
   async execute(command: StartTaskWorkflowCommand): Promise<Result<TaskExecutionRecord>> {
@@ -47,6 +48,9 @@ export class StartTaskWorkflow {
     const task = await this.tasks.get(command.taskId);
     if (!task.ok) return task;
     if (task.value.status !== "queued") return err(notQueued(command.taskId, task.value.status));
+    const ready = await this.dependencies.prerequisitesSatisfied(command.taskId);
+    if (!ready.ok) return ready;
+    if (!ready.value) return err(prerequisitesIncomplete(command.taskId));
 
     const preparing = await this.tasks.transition(command.taskId, "preparing");
     if (!preparing.ok) return preparing;
@@ -133,5 +137,15 @@ function capacityReached(limit: number): AppError {
     message: `The configured concurrency limit (${limit}) has been reached.`,
     retryable: true,
     context: { limit: String(limit) }
+  };
+}
+
+function prerequisitesIncomplete(taskId: TaskId): AppError {
+  return {
+    code: "task.prerequisites-incomplete",
+    category: "conflict",
+    message: "Task prerequisites must be completed before execution can start.",
+    retryable: true,
+    context: { taskId }
   };
 }
