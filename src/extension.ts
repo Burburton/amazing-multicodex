@@ -44,6 +44,7 @@ import {
   ValidationProfileId
 } from "./modules/validation/public";
 import { SystemClock } from "./shared/core/clock";
+import { CoalescingAsyncRunner } from "./shared/core/coalescingAsyncRunner";
 import { CryptoIdGenerator } from "./shared/core/idGenerator";
 import { TaskTreeProvider } from "./ui/taskTreeProvider";
 import { TaskDetailPanelManager, TaskDetailAction } from "./ui/taskDetailPanel";
@@ -118,7 +119,10 @@ export function activate(context: vscode.ExtensionContext): void {
   let activityBridge: AgentActivityBridge | undefined;
   let approvalBridge: ApprovalBridge | undefined;
   let boundAgent: Awaited<ReturnType<CodexProcessSupervisor["start"]>> | undefined;
-  let dispatching: Promise<void> | undefined;
+  const dispatcher = new CoalescingAsyncRunner(
+    dispatchQueueOnce,
+    (currentNotify, incomingNotify) => currentNotify || incomingNotify
+  );
 
   context.subscriptions.push(
     tree,
@@ -669,9 +673,7 @@ export function activate(context: vscode.ExtensionContext): void {
     });
 
   function dispatchQueue(notify: boolean): Promise<void> {
-    if (dispatching) return dispatching;
-    dispatching = dispatchQueueOnce(notify).finally(() => { dispatching = undefined; });
-    return dispatching;
+    return dispatcher.run(notify);
   }
 
   async function dispatchQueueOnce(notify: boolean): Promise<void> {
