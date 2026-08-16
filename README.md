@@ -87,16 +87,14 @@ npm run package
 code --install-extension ./amazing-multicodex-0.1.0.vsix
 ```
 
-Reload VS Code, open Explorer, and find the `MultiCodex Projects` and
-`MultiCodex Tasks` views. Workspace Git roots are registered automatically;
+Reload VS Code, open Explorer, and find the `MultiCodex Projects` tree.
+Workspace Git roots are registered automatically;
 use `MultiCodex: Add Project` to register another local repository. Click a
-project to open its dashboard and click any task row to drill into task details.
-The task view's empty
-state links directly to task creation, runtime status, and extension settings.
-This Explorer view is the main visual interface: click a task to open its live
-detail panel, use inline buttons for its next action, or right-click for all
-available operations. The same operations are available from the Command
-Palette (`Ctrl/Cmd+Shift+P`) under `MultiCodex:` and prompt for an eligible task.
+project to open its dashboard, or expand it to manage that project's tasks.
+Click a child task to open its live detail panel, use inline buttons for its
+next action, or right-click for all available operations. The same operations
+are available from the Command Palette (`Ctrl/Cmd+Shift+P`) under `MultiCodex:`
+and prompt for an eligible task.
 
 The normal task flow is:
 

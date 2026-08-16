@@ -33,7 +33,6 @@
     }
   },
   "activationEvents": [
-    "onView:amazingMultiCodex.tasks",
     "onView:amazingMultiCodex.projects",
     "onCommand:amazingMultiCodex.addProject",
     "onCommand:amazingMultiCodex.refreshProjects",
@@ -160,11 +159,6 @@
           "id": "amazingMultiCodex.projects",
           "name": "MultiCodex Projects",
           "when": "true"
-        },
-        {
-          "id": "amazingMultiCodex.tasks",
-          "name": "MultiCodex Tasks",
-          "when": "true"
         }
       ]
     },
@@ -173,11 +167,6 @@
         "view": "amazingMultiCodex.projects",
         "contents": "Manage repositories and project-level task health.\n[Add a Git project](command:amazingMultiCodex.addProject)\n[Refresh projects](command:amazingMultiCodex.refreshProjects)",
         "when": "amazingMultiCodex.hasProjects == false"
-      },
-      {
-        "view": "amazingMultiCodex.tasks",
-        "contents": "Coordinate isolated Codex tasks in this Git workspace.\n[Create your first task](command:amazingMultiCodex.createTask)\n[Check runtime status](command:amazingMultiCodex.showRuntimeStatus)\n[Configure MultiCodex](command:workbench.action.openSettings?%5B%22%40ext%3Aamazing-multicodex.amazing-multicodex%22%5D)",
-        "when": "amazingMultiCodex.hasTasks == false"
       }
     ],
     "commands": [
@@ -309,104 +298,104 @@
         },
         {
           "command": "amazingMultiCodex.createTask",
-          "when": "view == amazingMultiCodex.tasks",
+          "when": "view == amazingMultiCodex.projects",
           "group": "navigation"
         },
         {
           "command": "amazingMultiCodex.refreshTasks",
-          "when": "view == amazingMultiCodex.tasks",
+          "when": "view == amazingMultiCodex.projects",
           "group": "navigation"
         },
         {
           "command": "amazingMultiCodex.showRuntimeStatus",
-          "when": "view == amazingMultiCodex.tasks",
+          "when": "view == amazingMultiCodex.projects",
           "group": "navigation"
         },
         {
           "command": "amazingMultiCodex.dispatchQueue",
-          "when": "view == amazingMultiCodex.tasks",
+          "when": "view == amazingMultiCodex.projects",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
           "command": "amazingMultiCodex.editTask",
-          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.draft",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexTask.draft",
           "group": "inline"
         },
         {
           "command": "amazingMultiCodex.showTaskDetails",
-          "when": "view == amazingMultiCodex.tasks",
+          "when": "view == amazingMultiCodex.projects && viewItem =~ /^multicodexTask\\./",
           "group": "navigation@1"
         },
         {
           "command": "amazingMultiCodex.queueTask",
-          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.draft || viewItem == multicodexTask.failed || viewItem == multicodexTask.cancelled || viewItem == multicodexTask.blocked)",
+          "when": "view == amazingMultiCodex.projects && (viewItem == multicodexTask.draft || viewItem == multicodexTask.failed || viewItem == multicodexTask.cancelled || viewItem == multicodexTask.blocked)",
           "group": "inline"
         },
         {
           "command": "amazingMultiCodex.startTask",
-          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.queued",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexTask.queued",
           "group": "inline"
         },
         {
           "command": "amazingMultiCodex.resumeTask",
-          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.running",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexTask.running",
           "group": "inline"
         },
         {
           "command": "amazingMultiCodex.steerTask",
-          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.running",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexTask.running",
           "group": "navigation"
         },
         {
           "command": "amazingMultiCodex.showActivity",
-          "when": "view == amazingMultiCodex.tasks",
+          "when": "view == amazingMultiCodex.projects && viewItem =~ /^multicodexTask\\./",
           "group": "navigation"
         },
         {
           "command": "amazingMultiCodex.cancelTask",
-          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.queued || viewItem == multicodexTask.running || viewItem == multicodexTask.awaitingApproval)",
+          "when": "view == amazingMultiCodex.projects && (viewItem == multicodexTask.queued || viewItem == multicodexTask.running || viewItem == multicodexTask.awaitingApproval)",
           "group": "inline"
         },
         {
           "command": "amazingMultiCodex.validateTask",
-          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.validating",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexTask.validating",
           "group": "inline"
         },
         {
           "command": "amazingMultiCodex.showChanges",
-          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.validating || viewItem == multicodexTask.readyForReview || viewItem == multicodexTask.completed || viewItem == multicodexTask.failed || viewItem == multicodexTask.cancelled || viewItem == multicodexTask.blocked || viewItem == multicodexTask.blocked.integration)",
+          "when": "view == amazingMultiCodex.projects && (viewItem == multicodexTask.validating || viewItem == multicodexTask.readyForReview || viewItem == multicodexTask.completed || viewItem == multicodexTask.failed || viewItem == multicodexTask.cancelled || viewItem == multicodexTask.blocked || viewItem == multicodexTask.blocked.integration)",
           "group": "inline"
         },
         {
           "command": "amazingMultiCodex.integrateTask",
-          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.readyForReview || viewItem == multicodexTask.blocked.integration)",
+          "when": "view == amazingMultiCodex.projects && (viewItem == multicodexTask.readyForReview || viewItem == multicodexTask.blocked.integration)",
           "group": "inline"
         },
         {
           "command": "amazingMultiCodex.recoverIntegration",
-          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.integrating",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexTask.integrating",
           "group": "inline"
         },
         {
           "command": "amazingMultiCodex.addDependency",
-          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.draft",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexTask.draft",
           "group": "navigation"
         },
         {
           "command": "amazingMultiCodex.removeDependency",
-          "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.draft",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexTask.draft",
           "group": "navigation"
         },
         {
           "command": "amazingMultiCodex.releaseWorkspace",
-          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.completed || viewItem == multicodexTask.cancelled)",
+          "when": "view == amazingMultiCodex.projects && (viewItem == multicodexTask.completed || viewItem == multicodexTask.cancelled)",
           "group": "navigation"
         },
         {
           "command": "amazingMultiCodex.deleteTask",
-          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.draft || viewItem == multicodexTask.readyForReview || viewItem == multicodexTask.completed || viewItem == multicodexTask.failed || viewItem == multicodexTask.cancelled || viewItem == multicodexTask.blocked || viewItem == multicodexTask.blocked.integration || viewItem == multicodexTask.deleting)",
+          "when": "view == amazingMultiCodex.projects && (viewItem == multicodexTask.draft || viewItem == multicodexTask.readyForReview || viewItem == multicodexTask.completed || viewItem == multicodexTask.failed || viewItem == multicodexTask.cancelled || viewItem == multicodexTask.blocked || viewItem == multicodexTask.blocked.integration || viewItem == multicodexTask.deleting)",
           "group": "navigation@99"
         }
       ]

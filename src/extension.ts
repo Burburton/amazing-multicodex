@@ -52,7 +52,6 @@ import { SystemClock } from "./shared/core/clock";
 import { CoalescingAsyncRunner } from "./shared/core/coalescingAsyncRunner";
 import { CryptoIdGenerator } from "./shared/core/idGenerator";
 import { redactAndTruncateSensitiveText } from "./shared/core/sensitiveData";
-import { TaskTreeProvider } from "./ui/taskTreeProvider";
 import { TaskDetailPanelManager, TaskDetailAction } from "./ui/taskDetailPanel";
 import { sortTasksForDisplay, taskPriorityLabel, taskStatusLabel } from "./ui/taskPresentation";
 import { ProjectId, ProjectProps, ProjectService } from "./modules/projects/public";
@@ -73,12 +72,6 @@ export function activate(context: vscode.ExtensionContext): void {
   const dependencies = new TaskDependencyService(
     dependencyRepository, repository
   );
-  const tree = new TaskTreeProvider(repository, {
-    error: (message, error) => {
-      console.error("MultiCodex task tree error", error);
-      void vscode.window.showErrorMessage(`MultiCodex could not load tasks: ${message}`);
-    }
-  });
   const projectTree = new ProjectTreeProvider(projectRepository, repository);
   const ids = new CryptoIdGenerator();
   const codex = new CodexProcessSupervisor(new NodeProcessFactory(), {
@@ -207,7 +200,6 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   function refreshViews(): void {
-    tree.refresh();
     projectTree.refresh();
     void projectDetails.refreshAll();
   }
@@ -223,7 +215,6 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   context.subscriptions.push(
-    tree,
     projectTree,
     taskDetails,
     projectDetails,
@@ -233,7 +224,6 @@ export function activate(context: vscode.ExtensionContext): void {
       approvalBridge?.stop();
       codex.stop();
     } },
-    vscode.window.registerTreeDataProvider("amazingMultiCodex.tasks", tree),
     vscode.window.registerTreeDataProvider("amazingMultiCodex.projects", projectTree),
     vscode.commands.registerCommand("amazingMultiCodex.refreshProjects", async () => {
       await ensureWorkspaceProjects();
