@@ -70,11 +70,11 @@ export function activate(context: vscode.ExtensionContext): void {
     malformedProtocolLine: line => console.warn("MultiCodex ignored malformed Codex output", line),
     stderr: chunk => console.warn("Codex App Server:", chunk.trimEnd()),
     exited: exit => {
-      connectedTasks.clear();
+      reportRuntimeDisconnect(`Codex App Server exited with code ${String(exit.code)}.`);
       console.info("Codex App Server exited", exit);
     },
     processError: error => {
-      connectedTasks.clear();
+      reportRuntimeDisconnect(`Codex App Server stopped unexpectedly: ${error.message}`);
       console.error("Codex App Server error", error);
     }
   });
@@ -123,6 +123,16 @@ export function activate(context: vscode.ExtensionContext): void {
     dispatchQueueOnce,
     (currentNotify, incomingNotify) => currentNotify || incomingNotify
   );
+
+  function reportRuntimeDisconnect(message: string): void {
+    const affected = connectedTasks.size;
+    connectedTasks.clear();
+    if (affected > 0) {
+      void vscode.window.showWarningMessage(
+        `${message} ${affected} running task(s) can be continued with MultiCodex: Resume Task.`
+      );
+    }
+  }
 
   context.subscriptions.push(
     tree,
