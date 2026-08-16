@@ -92,3 +92,43 @@ test("persists a decision and returns the protocol approval payload", async () =
   assert.equal(pending.ok && pending.value.length, 0);
 });
 
+test("cancels a captured approval when the task cannot await a decision", async () => {
+  const clock = new FixedClock();
+  const tasks = new InMemoryTaskRepository();
+  const task = Task.create({ id: "task-1" as TaskId, title: "Task", now: clock.now() });
+  assert.equal(task.ok, true);
+  if (!task.ok) return;
+  await tasks.save(task.value, -1);
+  const executions = new InMemoryExecutionRepository();
+  await executions.save({
+    id: "execution-1" as TaskExecutionId,
+    taskId: "task-1" as TaskId,
+    workspace: {
+      id: "workspace-1" as WorkspaceId, taskId: "task-1" as TaskId,
+      repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/one",
+      branch: "branch", baseRef: "base"
+    },
+    agent: {
+      executionId: "agent-1" as ExecutionId,
+      threadId: "thread-1" as AgentThreadId,
+      turnId: "turn-1" as AgentTurnId
+    },
+    status: "running", createdAt: clock.now(), updatedAt: clock.now(), version: 0
+  }, -1);
+  const approvals = new InMemoryApprovalRepository();
+  const agent = new ApprovalAgent();
+  const bridge = new ApprovalBridge(
+    agent, executions, new ApprovalService(approvals, clock, new FixedIds()),
+    new TaskLifecycleService(tasks, clock), { decide: async () => "approved" }
+  );
+  bridge.start();
+
+  const response = await agent.handler?.({
+    requestId: "request-1", method: "item/fileChange/requestApproval",
+    threadId: "thread-1" as AgentThreadId, turnId: "turn-1" as AgentTurnId, payload: {}
+  });
+
+  assert.deepEqual(response, { decision: "cancel" });
+  const pending = await approvals.findPendingByTask("task-1" as TaskId);
+  assert.equal(pending.ok && pending.value.length, 0);
+});

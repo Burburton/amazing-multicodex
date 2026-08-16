@@ -40,11 +40,23 @@ export class ApprovalBridge {
       detail: classification.detail
     });
     if (!captured.ok) return { decision: "cancel" };
-    await this.tasks.transition(execution.value.taskId, "awaitingApproval", request.method);
+    const awaiting = await this.tasks.transition(execution.value.taskId, "awaitingApproval", request.method);
+    if (!awaiting.ok) {
+      await this.approvals.decide({
+        approvalId: captured.value.id,
+        decision: "cancelled",
+        reason: awaiting.error.code
+      });
+      return { decision: "cancel" };
+    }
     const decision = await this.prompt.decide(captured.value);
     const decided = await this.approvals.decide({ approvalId: captured.value.id, decision });
-    await this.tasks.transition(execution.value.taskId, "running");
     if (!decided.ok) return { decision: "cancel" };
+    const running = await this.tasks.transition(execution.value.taskId, "running");
+    if (!running.ok) {
+      await this.tasks.transition(execution.value.taskId, "blocked", running.error.code);
+      return { decision: "cancel" };
+    }
     return { decision: decision === "approved" ? "accept" : decision === "declined" ? "decline" : "cancel" };
   }
 }
@@ -66,4 +78,3 @@ function classify(request: AgentApprovalRequest): { risk: ApprovalRisk; title: s
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
-
