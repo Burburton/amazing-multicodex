@@ -12,6 +12,7 @@ import { MementoTaskDependencyRepository } from "./adapters/vscode/mementoTaskDe
 import { AgentActivityBridge } from "./host/agentActivityBridge";
 import { ApprovalBridge } from "./host/approvalBridge";
 import { RuntimePreflight } from "./host/runtimePreflight";
+import { formatValidationActivity } from "./host/validationActivity";
 import { ActivityService } from "./modules/activity/public";
 import { ApprovalService } from "./modules/approvals/public";
 import { IntegrateTaskWorkflow, IntegrationStrategy, RecoverIntegrationWorkflow } from "./modules/integration/public";
@@ -434,7 +435,10 @@ export function activate(context: vscode.ExtensionContext): void {
         taskId: task.id,
         kind: result.value.status === "passed" ? "validation" : "error",
         summary: `Validation ${result.value.status}`,
-        detail: result.value.checks.map(check => `${check.checkId}: ${check.status}`).join("\n")
+        detail: formatValidationActivity(
+          result.value,
+          settings.value.validationCommands.map(command => command.label)
+        )
       });
       void vscode.window.showInformationMessage(result.value.status === "cancelled"
         ? `Validation cancelled; '${task.title}' remains ready to validate.`
