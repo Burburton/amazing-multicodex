@@ -47,6 +47,7 @@ import {
 import { SystemClock } from "./shared/core/clock";
 import { CoalescingAsyncRunner } from "./shared/core/coalescingAsyncRunner";
 import { CryptoIdGenerator } from "./shared/core/idGenerator";
+import { redactAndTruncateSensitiveText } from "./shared/core/sensitiveData";
 import { TaskTreeProvider } from "./ui/taskTreeProvider";
 import { TaskDetailPanelManager, TaskDetailAction } from "./ui/taskDetailPanel";
 import { sortTasksForDisplay, taskPriorityLabel, taskStatusLabel } from "./ui/taskPresentation";
@@ -796,17 +797,34 @@ export function activate(context: vscode.ExtensionContext): void {
         if (!startedTaskIds.has(taskId)) connectedTasks.delete(taskId);
       }
       const failed = result.value.failures.length;
-      if (notify || failed) void vscode.window.showInformationMessage(
-        `Started ${result.value.started.length} queued task(s)${failed ? `; ${failed} failed to start` : ""}.`
-      );
+      if (failed) {
+        const titles = new Map(listed.value.map(item => {
+          const snapshot = item.snapshot();
+          return [snapshot.id, snapshot.title] as const;
+        }));
+        const details = result.value.failures.slice(0, 3)
+          .map(failure => `${titles.get(failure.taskId) ?? failure.taskId}: ${failure.error.message}`)
+          .join("; ");
+        const remainder = failed > 3 ? `; and ${failed - 3} more` : "";
+        await offerRuntimeCheck(
+          `Started ${result.value.started.length} queued task(s), but ${failed} failed: ${details}${remainder}`
+        );
+      } else if (notify) {
+        void vscode.window.showInformationMessage(`Started ${result.value.started.length} queued task(s).`);
+      }
     } catch (cause) {
       for (const taskId of connectionCandidates) connectedTasks.delete(taskId);
       console.error("Could not dispatch queued MultiCodex tasks", cause);
-      if (notify) {
-        const message = cause instanceof Error ? cause.message : typeof cause === "object" && cause && "message" in cause
-          ? String(cause.message) : "Unknown dispatch error.";
-        void vscode.window.showErrorMessage(`Could not dispatch queued tasks: ${message}`);
-      }
+      const message = cause instanceof Error ? cause.message : typeof cause === "object" && cause && "message" in cause
+        ? String(cause.message) : "Unknown dispatch error.";
+      await offerRuntimeCheck(`Could not dispatch queued tasks: ${message}`);
+    }
+  }
+
+  async function offerRuntimeCheck(message: string): Promise<void> {
+    const action = await vscode.window.showErrorMessage(redactAndTruncateSensitiveText(message, 2_000), "Check Runtime");
+    if (action === "Check Runtime") {
+      await vscode.commands.executeCommand("amazingMultiCodex.showRuntimeStatus");
     }
   }
 
