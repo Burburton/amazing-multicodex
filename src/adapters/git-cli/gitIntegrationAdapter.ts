@@ -26,6 +26,9 @@ export class GitIntegrationAdapter implements IntegrationPort {
     const source = await this.git(input.workspace.path, ["rev-parse", "HEAD"]);
     if (!source.ok) return source;
     const sourceCommit = source.value.stdout.trim();
+    if (sourceCommit === input.workspace.baseRef) {
+      return err(integrationError("integration.no-changes", "The task workspace has no changes to integrate."));
+    }
     if (input.strategy === "merge") {
       const merged = await this.git(input.targetRepositoryRoot, [
         "merge", "--no-ff", sourceCommit, "-m", input.commitMessage

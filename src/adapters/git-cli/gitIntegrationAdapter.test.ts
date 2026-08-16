@@ -57,3 +57,20 @@ test("squashes the resolved source commit rather than the mutable branch name", 
   assert.equal(result.ok, true);
   assert.deepEqual(commands.calls[4].args, ["merge", "--squash", "source-sha"]);
 });
+
+test("rejects a workspace whose HEAD still equals its immutable base", async () => {
+  const commands = new Commands();
+  commands.results.push(success(), success(), success("", 0), success("base-sha\n"));
+  const result = await new GitIntegrationAdapter(commands).integrate({
+    workspace: {
+      id: "workspace" as WorkspaceId, taskId: "task" as TaskId,
+      repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/task",
+      branch: "multicodex/task", baseRef: "base-sha"
+    },
+    targetRepositoryRoot: "/repo", strategy: "merge", commitMessage: "Integrate task"
+  });
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, "integration.no-changes");
+  assert.equal(commands.calls.some(call => call.args[0] === "merge"), false);
+});
