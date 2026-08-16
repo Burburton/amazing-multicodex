@@ -38,7 +38,15 @@ export class ResumeTaskWorkflow {
         version: active.value.version + 1
       };
       const saved = await this.executions.save(updated, active.value.version);
-      return saved.ok ? ok(updated) : saved;
+      if (saved.ok) return ok(updated);
+      try {
+        await this.agents.interrupt(agent);
+        return saved;
+      } catch (cause) {
+        const compensation = resumeCompensationFailed(saved.error, cause);
+        await this.tasks.transition(command.taskId, "blocked", compensation.code);
+        return err(compensation);
+      }
     } catch (cause) {
       return err(resumeFailed(cause));
     }
@@ -57,3 +65,12 @@ function resumeFailed(cause: unknown): AppError {
   return { code: "codex.resume-failed", category: "unavailable", message: "Codex execution could not be resumed.", retryable: true, cause };
 }
 
+function resumeCompensationFailed(persistenceFailure: AppError, cause: unknown): AppError {
+  return {
+    code: "execution.resume-compensation-failed",
+    category: "unavailable",
+    message: "The resumed Codex turn could not be persisted or interrupted. Reload the window before retrying.",
+    retryable: false,
+    cause: { persistenceFailure, interruptFailure: cause }
+  };
+}
