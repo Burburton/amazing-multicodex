@@ -8,7 +8,7 @@ dependency rules, runtime design, and delivery slices.
 
 ## Current status
 
-The extension currently provides an early single-task execution loop:
+The extension currently provides the core multi-task execution loop:
 
 - persistent tasks, execution associations, approvals, and bounded activity;
 - a `MultiCodex Tasks` Explorer view with create, start, resume, cancel, and
@@ -18,6 +18,7 @@ The extension currently provides an early single-task execution loop:
 - streamed turn completion, agent response capture, and task-state recovery;
 - modal command and file-change approvals with durable decisions;
 - configurable sequential validation gates with persisted task transitions;
+- persisted acyclic prerequisites and a priority-aware queue dispatcher;
 - complete worktree diff review, including committed and untracked changes;
 - explicit merge or squash integration into a clean target repository;
 - automated module-boundary checks, unit/contract tests, and VSIX packaging.
@@ -37,7 +38,7 @@ Task board → scheduler → Codex session adapter → isolated worktree
 
 Next milestones:
 
-1. Persist dependency graphs and add automatic queue scheduling.
+1. Connect the queue dispatcher to automatic host lifecycle triggers.
 2. Replace quick-pick activity with a task-detail webview.
 3. Add SQLite migrations and full restart reconciliation.
 4. Add conflict-resolution and safe worktree cleanup workflows.

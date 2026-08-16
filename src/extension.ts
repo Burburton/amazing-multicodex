@@ -434,5 +434,5 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {
-  // Task execution will be added behind the App Server adapter.
+  // Disposable registrations and the Codex supervisor are released by VS Code.
 }

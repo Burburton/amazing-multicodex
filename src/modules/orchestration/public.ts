@@ -3,6 +3,8 @@ export { ExecutionCapacityGate } from "./domain/executionCapacityGate";
 export type { SchedulingCandidate } from "./domain/scheduler";
 export { StartTaskWorkflow } from "./application/startTaskWorkflow";
 export type { StartTaskWorkflowCommand } from "./application/startTaskWorkflow";
+export { DispatchQueuedTasksWorkflow } from "./application/dispatchQueuedTasksWorkflow";
+export type { DispatchQueuedTasksCommand, DispatchQueuedTasksReport } from "./application/dispatchQueuedTasksWorkflow";
 export { ResumeTaskWorkflow } from "./application/resumeTaskWorkflow";
 export type { ResumeTaskWorkflowCommand } from "./application/resumeTaskWorkflow";
 export { CancelTaskWorkflow } from "./application/cancelTaskWorkflow";
