@@ -1,6 +1,7 @@
 import { AppError, Result, err, ok } from "../../shared/core/result";
 import { KeyValueState } from "../../shared/ports/keyValueState";
 import { Task, TaskId, TaskProps, TaskRepository } from "../../modules/tasks/public";
+import { AsyncWriteQueue } from "./asyncWriteQueue";
 
 interface StoredTask extends Omit<TaskProps, "createdAt" | "updatedAt"> {
   readonly createdAt: string;
@@ -10,6 +11,7 @@ interface StoredTask extends Omit<TaskProps, "createdAt" | "updatedAt"> {
 const STORAGE_KEY = "amazingMultiCodex.tasks.v2";
 
 export class MementoTaskRepository implements TaskRepository {
+  private readonly writes = new AsyncWriteQueue();
   constructor(private readonly state: KeyValueState) {}
 
   async findById(id: TaskId): Promise<Result<Task | undefined>> {
@@ -25,6 +27,10 @@ export class MementoTaskRepository implements TaskRepository {
   }
 
   async save(task: Task, expectedVersion: number): Promise<Result<void>> {
+    return this.writes.run(() => this.saveOnce(task, expectedVersion));
+  }
+
+  private async saveOnce(task: Task, expectedVersion: number): Promise<Result<void>> {
     const records = this.records();
     if (!records.ok) return records;
     const snapshot = task.snapshot();

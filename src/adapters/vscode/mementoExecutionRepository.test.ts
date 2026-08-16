@@ -52,3 +52,27 @@ test("returns a typed error for malformed stored execution state", async () => {
   assert.equal(listed.ok, false);
   if (!listed.ok) assert.equal(listed.error.code, "execution.state-invalid");
 });
+
+test("serializes concurrent writes so different executions are not lost", async () => {
+  const repository = new MementoExecutionRepository(new FakeState());
+  const base = {
+    workspace: {
+      id: "workspace-1" as WorkspaceId, taskId: "task-1" as TaskId,
+      repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/one",
+      branch: "branch", baseRef: "main"
+    },
+    status: "prepared" as const,
+    createdAt: new Date("2026-08-15T12:00:00Z"),
+    updatedAt: new Date("2026-08-15T12:00:00Z"), version: 0
+  };
+  const [first, second] = await Promise.all([
+    repository.save({ ...base, id: "execution-1" as TaskExecutionId, taskId: "task-1" as TaskId }, -1),
+    repository.save({
+      ...base, id: "execution-2" as TaskExecutionId, taskId: "task-2" as TaskId,
+      workspace: { ...base.workspace, id: "workspace-2" as WorkspaceId, taskId: "task-2" as TaskId, path: "/worktrees/two" }
+    }, -1)
+  ]);
+  assert.equal(first.ok && second.ok, true);
+  const active = await repository.listActive();
+  assert.equal(active.ok && active.value.length, 2);
+});

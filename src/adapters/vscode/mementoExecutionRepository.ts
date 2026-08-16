@@ -8,6 +8,7 @@ import {
 } from "../../modules/orchestration/public";
 import { TaskId } from "../../modules/tasks/public";
 import { WorkspaceRef } from "../../modules/workspaces/public";
+import { AsyncWriteQueue } from "./asyncWriteQueue";
 
 interface StoredExecution {
   readonly id: string;
@@ -23,6 +24,7 @@ interface StoredExecution {
 const STORAGE_KEY = "amazingMultiCodex.executions.v1";
 
 export class MementoExecutionRepository implements ExecutionRepository {
+  private readonly writes = new AsyncWriteQueue();
   constructor(private readonly state: KeyValueState) {}
 
   async findById(id: TaskExecutionId): Promise<Result<TaskExecutionRecord | undefined>> {
@@ -67,6 +69,10 @@ export class MementoExecutionRepository implements ExecutionRepository {
   }
 
   async save(record: TaskExecutionRecord, expectedVersion: number): Promise<Result<void>> {
+    return this.writes.run(() => this.saveOnce(record, expectedVersion));
+  }
+
+  private async saveOnce(record: TaskExecutionRecord, expectedVersion: number): Promise<Result<void>> {
     const records = this.records();
     if (!records.ok) return records;
     const index = records.value.findIndex(item => item.id === record.id);

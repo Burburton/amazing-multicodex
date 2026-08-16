@@ -36,3 +36,18 @@ test("returns a typed error for malformed stored activity", async () => {
   assert.equal(records.ok, false);
   if (!records.ok) assert.equal(records.error.code, "activity.state-invalid");
 });
+
+test("serializes concurrent appends and assigns unique sequences", async () => {
+  const repository = new MementoActivityRepository(new FakeState());
+  const appended = await Promise.all(["first", "second"].map(summary => repository.append({
+    id: summary as ActivityId,
+    taskId: "task-1" as TaskId,
+    kind: "lifecycle",
+    summary,
+    occurredAt: new Date("2026-08-15T12:00:00Z")
+  })));
+  assert.equal(appended.every(result => result.ok), true);
+  const records = await repository.listByTask("task-1" as TaskId);
+  assert.equal(records.ok && records.value.length, 2);
+  if (records.ok) assert.deepEqual(records.value.map(record => record.sequence), [2, 1]);
+});

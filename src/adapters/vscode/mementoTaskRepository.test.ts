@@ -34,3 +34,15 @@ test("returns a typed error for malformed stored task state", async () => {
   assert.equal(listed.ok, false);
   if (!listed.ok) assert.equal(listed.error.code, "task.state-invalid");
 });
+
+test("serializes concurrent saves so different tasks are not lost", async () => {
+  const repository = new MementoTaskRepository(new FakeState());
+  const first = Task.create({ id: "task-1" as TaskId, title: "First", now: new Date("2026-08-15T12:00:00Z") });
+  const second = Task.create({ id: "task-2" as TaskId, title: "Second", now: new Date("2026-08-15T12:00:00Z") });
+  assert.equal(first.ok && second.ok, true);
+  if (!first.ok || !second.ok) return;
+  const saved = await Promise.all([repository.save(first.value, -1), repository.save(second.value, -1)]);
+  assert.equal(saved.every(result => result.ok), true);
+  const listed = await repository.list();
+  assert.equal(listed.ok && listed.value.length, 2);
+});

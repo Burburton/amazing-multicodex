@@ -7,6 +7,7 @@ import {
   ApprovalRepository
 } from "../../modules/approvals/public";
 import { TaskId } from "../../modules/tasks/public";
+import { AsyncWriteQueue } from "./asyncWriteQueue";
 
 interface StoredApproval extends Omit<ApprovalProps, "createdAt" | "decidedAt"> {
   readonly createdAt: string;
@@ -16,6 +17,7 @@ interface StoredApproval extends Omit<ApprovalProps, "createdAt" | "decidedAt"> 
 const STORAGE_KEY = "amazingMultiCodex.approvals.v1";
 
 export class MementoApprovalRepository implements ApprovalRepository {
+  private readonly writes = new AsyncWriteQueue();
   constructor(private readonly state: KeyValueState) {}
 
   async findById(id: ApprovalId): Promise<Result<Approval | undefined>> {
@@ -34,6 +36,10 @@ export class MementoApprovalRepository implements ApprovalRepository {
   }
 
   async save(approval: Approval, expectedVersion: number): Promise<Result<void>> {
+    return this.writes.run(() => this.saveOnce(approval, expectedVersion));
+  }
+
+  private async saveOnce(approval: Approval, expectedVersion: number): Promise<Result<void>> {
     const records = this.records();
     if (!records.ok) return records;
     const snapshot = approval.snapshot();
