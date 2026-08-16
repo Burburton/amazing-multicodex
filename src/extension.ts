@@ -124,18 +124,27 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("amazingMultiCodex.createTask", async () => {
       const title = await vscode.window.showInputBox({
         prompt: "What should Codex work on?",
-        placeHolder: "e.g. Add retry handling to the API client"
+        placeHolder: "e.g. Add retry handling to the API client",
+        validateInput: value => !value.trim()
+          ? "Task title is required."
+          : value.trim().length > 200 ? "Task title cannot exceed 200 characters." : undefined
       });
       if (!title?.trim()) return;
 
       const description = await vscode.window.showInputBox({
         prompt: "Optional task context",
-        placeHolder: "Constraints, acceptance criteria, or relevant notes"
+        placeHolder: "Constraints, relevant files, or implementation notes",
+        validateInput: value => value.trim().length > 20_000
+          ? "Task context cannot exceed 20,000 characters."
+          : undefined
       });
+      if (description === undefined) return;
       const criteriaInput = await vscode.window.showInputBox({
         prompt: "Optional acceptance criteria (separate multiple items with semicolons)",
-        placeHolder: "Tests pass; documentation updated"
+        placeHolder: "Tests pass; documentation updated",
+        validateInput: validateAcceptanceCriteriaInput
       });
+      if (criteriaInput === undefined) return;
       const acceptanceCriteria = criteriaInput?.split(";").map(item => item.trim()).filter(Boolean);
       const priority = await vscode.window.showQuickPick<{
         label: string;
@@ -154,7 +163,19 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       tree.refresh();
-      void vscode.window.showInformationMessage(`Created draft MultiCodex task: ${title.trim()}`);
+      const next = await vscode.window.showInformationMessage(
+        `Created draft MultiCodex task: ${created.value.title}`,
+        "Queue Task",
+        "Add Prerequisite",
+        "Open Details"
+      );
+      if (next === "Queue Task") {
+        await vscode.commands.executeCommand("amazingMultiCodex.queueTask", created.value);
+      } else if (next === "Add Prerequisite") {
+        await vscode.commands.executeCommand("amazingMultiCodex.addDependency", created.value);
+      } else if (next === "Open Details") {
+        await taskDetails.show(created.value.id);
+      }
     }),
     vscode.commands.registerCommand("amazingMultiCodex.refreshTasks", () => {
       tree.refresh();
@@ -759,4 +780,13 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
   // Disposable registrations and the Codex supervisor are released by VS Code.
+}
+
+function validateAcceptanceCriteriaInput(value: string): string | undefined {
+  const criteria = value.split(";").map(item => item.trim()).filter(Boolean);
+  if (criteria.length > 50) return "A task cannot have more than 50 acceptance criteria.";
+  if (criteria.some(item => item.length > 2_000)) {
+    return "Each acceptance criterion cannot exceed 2,000 characters.";
+  }
+  return undefined;
 }
