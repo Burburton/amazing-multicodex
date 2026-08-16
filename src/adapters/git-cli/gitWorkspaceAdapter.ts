@@ -48,11 +48,29 @@ export class GitWorkspaceAdapter implements WorkspacePort {
   }
 
   async diff(workspace: WorkspaceRef): Promise<Result<ChangeSet>> {
-    const summary = await this.git(workspace.path, ["diff", "--stat", `${workspace.baseRef}...HEAD`]);
+    const summary = await this.git(workspace.path, ["diff", "--stat", workspace.baseRef]);
     if (!summary.ok) return summary;
-    const patch = await this.git(workspace.path, ["diff", "--no-ext-diff", `${workspace.baseRef}...HEAD`]);
+    const patch = await this.git(workspace.path, ["diff", "--binary", "--no-ext-diff", workspace.baseRef]);
     if (!patch.ok) return patch;
-    return ok({ workspaceId: workspace.id, summary: summary.value.stdout, patch: patch.value.stdout });
+    const untracked = await this.git(workspace.path, ["ls-files", "--others", "--exclude-standard", "-z"]);
+    if (!untracked.ok) return untracked;
+    const untrackedFiles = untracked.value.stdout.split("\0").filter(Boolean);
+    const additions: string[] = [];
+    for (const file of untrackedFiles) {
+      const added = await this.git(
+        workspace.path,
+        ["diff", "--no-index", "--binary", "--", "/dev/null", file],
+        [0, 1]
+      );
+      if (!added.ok) return added;
+      additions.push(added.value.stdout);
+    }
+    const untrackedSummary = untrackedFiles.map(file => `Untracked: ${file}`).join("\n");
+    return ok({
+      workspaceId: workspace.id,
+      summary: [summary.value.stdout.trimEnd(), untrackedSummary].filter(Boolean).join("\n"),
+      patch: [patch.value.stdout.trimEnd(), ...additions.map(value => value.trimEnd())].filter(Boolean).join("\n")
+    });
   }
 
   async release(input: ReleaseWorkspaceInput): Promise<Result<void>> {
@@ -72,14 +90,18 @@ export class GitWorkspaceAdapter implements WorkspacePort {
     return removed.ok ? ok(undefined) : removed;
   }
 
-  private async git(cwd: string, args: readonly string[]): Promise<Result<CommandResult>> {
+  private async git(
+    cwd: string,
+    args: readonly string[],
+    acceptedExitCodes: readonly (number | null)[] = [0]
+  ): Promise<Result<CommandResult>> {
     let result: CommandResult;
     try {
       result = await this.commands.run({ executable: "git", args, cwd });
     } catch (cause) {
       return err(gitError("git.unavailable", "Git command could not be started.", true, cause));
     }
-    if (result.exitCode !== 0) {
+    if (!acceptedExitCodes.includes(result.exitCode)) {
       return err(gitError(
         "git.command-failed",
         result.stderr.trim() || `Git exited with code ${String(result.exitCode)}.`,

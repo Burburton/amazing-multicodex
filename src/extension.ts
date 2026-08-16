@@ -292,6 +292,27 @@ export function activate(context: vscode.ExtensionContext): void {
         detail: result.value.checks.map(check => `${check.checkId}: ${check.status}`).join("\n")
       });
       void vscode.window.showInformationMessage(`Validation ${result.value.status}: ${task.title}`);
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.showChanges", async (task?: TaskProps) => {
+      if (!task) {
+        void vscode.window.showErrorMessage("Select a MultiCodex task to inspect its changes.");
+        return;
+      }
+      const execution = await executions.findLatestByTask(task.id);
+      if (!execution.ok || !execution.value) {
+        void vscode.window.showErrorMessage(execution.ok ? "No execution was found for this task." : execution.error.message);
+        return;
+      }
+      const changes = await new GitWorkspaceAdapter(new NodeCommandRunner()).diff(execution.value.workspace);
+      if (!changes.ok) {
+        void vscode.window.showErrorMessage(changes.error.message);
+        return;
+      }
+      const document = await vscode.workspace.openTextDocument({
+        language: "diff",
+        content: changes.value.patch || "No committed changes relative to the task base ref."
+      });
+      await vscode.window.showTextDocument(document, { preview: true });
     })
   );
 

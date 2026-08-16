@@ -23,7 +23,8 @@
     "onCommand:amazingMultiCodex.resumeTask",
     "onCommand:amazingMultiCodex.showActivity",
     "onCommand:amazingMultiCodex.cancelTask",
-    "onCommand:amazingMultiCodex.validateTask"
+    "onCommand:amazingMultiCodex.validateTask",
+    "onCommand:amazingMultiCodex.showChanges"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -125,6 +126,11 @@
         "command": "amazingMultiCodex.validateTask",
         "title": "MultiCodex: Validate Task",
         "icon": "$(beaker)"
+      },
+      {
+        "command": "amazingMultiCodex.showChanges",
+        "title": "MultiCodex: Show Task Changes",
+        "icon": "$(diff)"
       }
     ],
     "menus": {
@@ -164,6 +170,11 @@
         {
           "command": "amazingMultiCodex.validateTask",
           "when": "view == amazingMultiCodex.tasks && viewItem == multicodexTask.validating",
+          "group": "inline"
+        },
+        {
+          "command": "amazingMultiCodex.showChanges",
+          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.validating || viewItem == multicodexTask.readyForReview || viewItem == multicodexTask.completed || viewItem == multicodexTask.failed)",
           "group": "inline"
         }
       ]

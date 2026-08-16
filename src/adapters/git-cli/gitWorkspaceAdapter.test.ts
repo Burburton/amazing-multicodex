@@ -73,3 +73,21 @@ test("does not release a dirty workspace without force", async () => {
   assert.equal(result.error.code, "workspace.dirty");
   assert.equal(commands.calls.some(call => call.args.includes("remove")), false);
 });
+
+test("includes untracked files in review patches", async () => {
+  const commands = new ScriptedCommands();
+  commands.responses.push(
+    success("tracked.ts | 1 +\n"),
+    success("tracked patch\n"),
+    success("new.ts\0"),
+    { ...success("new file patch\n"), exitCode: 1 }
+  );
+  const changes = await new GitWorkspaceAdapter(commands).diff(workspace);
+  assert.equal(changes.ok, true);
+  if (!changes.ok) return;
+  assert.match(changes.value.summary, /Untracked: new.ts/);
+  assert.match(changes.value.patch, /new file patch/);
+  assert.deepEqual(commands.calls[3].args, [
+    "diff", "--no-index", "--binary", "--", "/dev/null", "new.ts"
+  ]);
+});
