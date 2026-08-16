@@ -700,6 +700,12 @@ export function activate(context: vscode.ExtensionContext): void {
         );
         return selection === "Approve" ? "approved" : selection === "Decline" ? "declined" : "cancelled";
       }
+    }, {
+      error: (message, cause) => console.error(message, cause),
+      taskChanged: taskId => {
+        tree.refresh();
+        void taskDetails.refresh(taskId);
+      }
     });
   }
 

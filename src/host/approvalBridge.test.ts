@@ -70,12 +70,14 @@ test("persists a decision and returns the protocol approval payload", async () =
   }, -1);
   const approvalRepository = new InMemoryApprovalRepository();
   const agent = new ApprovalAgent();
+  const changed: TaskId[] = [];
   const bridge = new ApprovalBridge(
     agent,
     executions,
     new ApprovalService(approvalRepository, clock, new FixedIds()),
     new TaskLifecycleService(tasks, clock),
-    { decide: async () => "approved" }
+    { decide: async () => "approved" },
+    { error: () => undefined, taskChanged: taskId => changed.push(taskId) }
   );
   bridge.start();
   const response = await agent.handler?.({
@@ -90,6 +92,7 @@ test("persists a decision and returns the protocol approval payload", async () =
   assert.equal(found.ok && found.value?.snapshot().status, "running");
   const pending = await approvalRepository.findPendingByTask("task-1" as TaskId);
   assert.equal(pending.ok && pending.value.length, 0);
+  assert.deepEqual(changed, ["task-1", "task-1"]);
 });
 
 test("cancels a captured approval when the task cannot await a decision", async () => {
