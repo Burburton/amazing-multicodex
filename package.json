@@ -19,6 +19,7 @@
   "activationEvents": [
     "onView:amazingMultiCodex.tasks",
     "onCommand:amazingMultiCodex.createTask",
+    "onCommand:amazingMultiCodex.showRuntimeStatus",
     "onCommand:amazingMultiCodex.queueTask",
     "onCommand:amazingMultiCodex.dispatchQueue",
     "onCommand:amazingMultiCodex.startTask",
@@ -114,6 +115,11 @@
         "title": "MultiCodex: Refresh Tasks"
       },
       {
+        "command": "amazingMultiCodex.showRuntimeStatus",
+        "title": "MultiCodex: Show Runtime Status",
+        "icon": "$(pulse)"
+      },
+      {
         "command": "amazingMultiCodex.queueTask",
         "title": "MultiCodex: Queue or Retry Task",
         "icon": "$(debug-restart)"
@@ -183,6 +189,11 @@
         },
         {
           "command": "amazingMultiCodex.refreshTasks",
+          "when": "view == amazingMultiCodex.tasks",
+          "group": "navigation"
+        },
+        {
+          "command": "amazingMultiCodex.showRuntimeStatus",
           "when": "view == amazingMultiCodex.tasks",
           "group": "navigation"
         },

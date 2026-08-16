@@ -122,6 +122,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("amazingMultiCodex.refreshTasks", () => {
       tree.refresh();
     }),
+    vscode.commands.registerCommand("amazingMultiCodex.showRuntimeStatus", () => {
+      const health = codex.current()?.health() ?? { status: "disconnected" as const };
+      const detail = health.status === "ready" && health.userAgent ? ` (${health.userAgent})` : "";
+      void vscode.window.showInformationMessage(`MultiCodex runtime: ${health.status}${detail}`);
+    }),
     vscode.commands.registerCommand("amazingMultiCodex.queueTask", async (task?: TaskProps) => {
       if (!task) {
         void vscode.window.showErrorMessage("Select a draft, failed, cancelled, or blocked task to queue.");
