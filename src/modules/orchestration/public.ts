@@ -9,6 +9,8 @@ export { ResumeTaskWorkflow } from "./application/resumeTaskWorkflow";
 export type { ResumeTaskWorkflowCommand } from "./application/resumeTaskWorkflow";
 export { CancelTaskWorkflow } from "./application/cancelTaskWorkflow";
 export { ReleaseTaskWorkspaceWorkflow } from "./application/releaseTaskWorkspaceWorkflow";
+export { ReconcileExecutionsWorkflow } from "./application/reconcileExecutionsWorkflow";
+export type { ReconciliationReport } from "./application/reconcileExecutionsWorkflow";
 export { ValidateTaskWorkflow } from "./application/validateTaskWorkflow";
 export type { ValidateTaskWorkflowCommand } from "./application/validateTaskWorkflow";
 export { AgentEventCoordinator } from "./application/agentEventCoordinator";

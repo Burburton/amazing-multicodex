@@ -21,6 +21,7 @@ import {
   DispatchQueuedTasksWorkflow,
   ExecutionCapacityGate,
   ReleaseTaskWorkspaceWorkflow,
+  ReconcileExecutionsWorkflow,
   ResumeTaskWorkflow,
   SchedulerPolicy,
   StartTaskWorkflow,
@@ -66,6 +67,8 @@ export function activate(context: vscode.ExtensionContext): void {
     processError: error => console.error("Codex App Server error", error)
   });
   const executions = new MementoExecutionRepository(context.workspaceState);
+  const commandRunner = new NodeCommandRunner();
+  const gitWorkspaces = new GitWorkspaceAdapter(commandRunner);
   const capacity = new ExecutionCapacityGate();
   const activity = new ActivityService(
     new MementoActivityRepository(context.workspaceState), clock, ids
@@ -193,7 +196,7 @@ export function activate(context: vscode.ExtensionContext): void {
           bindAgent(agent, settings.value.maxActivityCharacters);
           const workflow = new StartTaskWorkflow(
             lifecycle,
-            new GitWorkspaceAdapter(new NodeCommandRunner()),
+            gitWorkspaces,
             agent,
             executions,
             clock,
@@ -361,7 +364,7 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showErrorMessage(execution.ok ? "No execution was found for this task." : execution.error.message);
         return;
       }
-      const changes = await new GitWorkspaceAdapter(new NodeCommandRunner()).diff(execution.value.workspace);
+      const changes = await gitWorkspaces.diff(execution.value.workspace);
       if (!changes.ok) {
         void vscode.window.showErrorMessage(changes.error.message);
         return;
@@ -396,7 +399,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const integrated = await new IntegrateTaskWorkflow(
         lifecycle,
         executions,
-        new GitIntegrationAdapter(new NodeCommandRunner())
+        new GitIntegrationAdapter(commandRunner)
       ).execute({
         taskId: task.id,
         targetRepositoryRoot: workspaceFolder.uri.fsPath,
@@ -492,7 +495,7 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       if (confirmed !== "Remove Worktree") return;
       const released = await new ReleaseTaskWorkspaceWorkflow(
-        lifecycle, executions, new GitWorkspaceAdapter(new NodeCommandRunner())
+        lifecycle, executions, gitWorkspaces
       ).execute(task.id);
       if (!released.ok) {
         void vscode.window.showErrorMessage(released.error.message);
@@ -501,6 +504,19 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showInformationMessage(`Released worktree for: ${task.title}`);
     })
   );
+
+  void new ReconcileExecutionsWorkflow(executions, lifecycle, gitWorkspaces, clock).execute()
+    .then(report => {
+      tree.refresh();
+      if (!report.ok) {
+        console.error("MultiCodex restart reconciliation failed", report.error);
+        void vscode.window.showErrorMessage(`MultiCodex recovery failed: ${report.error.message}`);
+      } else if (report.value.blocked.length > 0) {
+        void vscode.window.showWarningMessage(
+          `MultiCodex recovered with ${report.value.blocked.length} blocked task(s) requiring retry.`
+        );
+      }
+    });
 
   function dispatchQueue(notify: boolean): Promise<void> {
     if (dispatching) return dispatching;
@@ -532,7 +548,7 @@ export function activate(context: vscode.ExtensionContext): void {
       });
       bindAgent(agent, settings.value.maxActivityCharacters);
       const starter = new StartTaskWorkflow(
-        lifecycle, new GitWorkspaceAdapter(new NodeCommandRunner()), agent,
+        lifecycle, gitWorkspaces, agent,
         executions, clock, ids, capacity, dependencies
       );
       const dispatched = await new DispatchQueuedTasksWorkflow(
