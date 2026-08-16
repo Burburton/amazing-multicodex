@@ -10,6 +10,10 @@ export class InMemoryExecutionRepository implements ExecutionRepository {
     return ok(this.records.get(id));
   }
 
+  async listActive(): Promise<Result<readonly TaskExecutionRecord[]>> {
+    return ok([...this.records.values()].filter(record => ["prepared", "running"].includes(record.status)));
+  }
+
   async findActiveByTask(taskId: TaskId): Promise<Result<TaskExecutionRecord | undefined>> {
     return ok([...this.records.values()].find(record =>
       record.taskId === taskId && ["prepared", "running"].includes(record.status)

@@ -25,6 +25,7 @@ import {
   WorkspaceSnapshot
 } from "../../workspaces/public";
 import { InMemoryExecutionRepository } from "../adapters/inMemoryExecutionRepository";
+import { ExecutionCapacityGate } from "../domain/executionCapacityGate";
 import { StartTaskWorkflow } from "./startTaskWorkflow";
 
 class FixedClock implements Clock { now(): Date { return new Date("2026-08-15T12:00:00Z"); } }
@@ -74,13 +75,14 @@ test("coordinates queued task, workspace, agent, and execution record", async ()
   const agents = new FakeAgent();
   const executions = new InMemoryExecutionRepository();
   const workflow = new StartTaskWorkflow(
-    new TaskLifecycleService(tasks, clock), workspaces, agents, executions, clock, new SequenceIds()
+    new TaskLifecycleService(tasks, clock), workspaces, agents, executions, clock, new SequenceIds(), new ExecutionCapacityGate()
   );
   const result = await workflow.execute({
     taskId: "task-12345678" as TaskId,
     repositoryRoot: "/repo",
     worktreeRoot: "/worktrees",
-    baseRef: "main"
+    baseRef: "main",
+    concurrencyLimit: 2
   });
   assert.equal(result.ok, true);
   if (!result.ok) return;
@@ -91,4 +93,3 @@ test("coordinates queued task, workspace, agent, and execution record", async ()
   const task = await tasks.findById("task-12345678" as TaskId);
   assert.equal(task.ok && task.value?.snapshot().status, "running");
 });
-

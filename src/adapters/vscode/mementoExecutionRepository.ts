@@ -29,6 +29,12 @@ export class MementoExecutionRepository implements ExecutionRepository {
     return ok(toDomainOptional(this.records().find(record => record.id === id)));
   }
 
+  async listActive(): Promise<Result<readonly TaskExecutionRecord[]>> {
+    return ok(this.records()
+      .filter(record => ["prepared", "running"].includes(record.status))
+      .map(record => toDomainOptional(record)!));
+  }
+
   async findActiveByTask(taskId: TaskId): Promise<Result<TaskExecutionRecord | undefined>> {
     return ok(toDomainOptional(this.records().find(record =>
       record.taskId === taskId && ["prepared", "running"].includes(record.status)

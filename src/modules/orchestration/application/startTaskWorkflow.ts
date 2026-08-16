@@ -4,6 +4,7 @@ import { AppError, Result, err, ok } from "../../../shared/core/result";
 import { AgentRuntimePort } from "../../agents/public";
 import { TaskId, TaskLifecycleService } from "../../tasks/public";
 import { WorkspaceId, WorkspacePort, workspaceBranch } from "../../workspaces/public";
+import { ExecutionCapacityGate } from "../domain/executionCapacityGate";
 import { ExecutionRepository, TaskExecutionId, TaskExecutionRecord } from "../ports/executionRepository";
 
 export interface StartTaskWorkflowCommand {
@@ -11,6 +12,7 @@ export interface StartTaskWorkflowCommand {
   readonly repositoryRoot: string;
   readonly worktreeRoot: string;
   readonly baseRef: string;
+  readonly concurrencyLimit: number;
   readonly prompt?: string;
   readonly model?: string;
 }
@@ -22,13 +24,26 @@ export class StartTaskWorkflow {
     private readonly agents: AgentRuntimePort,
     private readonly executions: ExecutionRepository,
     private readonly clock: Clock,
-    private readonly ids: IdGenerator
+    private readonly ids: IdGenerator,
+    private readonly capacity: ExecutionCapacityGate
   ) {}
 
   async execute(command: StartTaskWorkflowCommand): Promise<Result<TaskExecutionRecord>> {
     const existing = await this.executions.findActiveByTask(command.taskId);
     if (!existing.ok) return existing;
     if (existing.value) return err(activeExecution(command.taskId));
+    const active = await this.executions.listActive();
+    if (!active.ok) return active;
+    const release = this.capacity.tryAcquire(active.value.length, command.concurrencyLimit);
+    if (!release) return err(capacityReached(command.concurrencyLimit));
+    try {
+      return await this.executeReserved(command);
+    } finally {
+      release();
+    }
+  }
+
+  private async executeReserved(command: StartTaskWorkflowCommand): Promise<Result<TaskExecutionRecord>> {
     const task = await this.tasks.get(command.taskId);
     if (!task.ok) return task;
     if (task.value.status !== "queued") return err(notQueued(command.taskId, task.value.status));
@@ -109,4 +124,14 @@ function notQueued(taskId: TaskId, status: string): AppError {
 
 function startFailed(cause: unknown): AppError {
   return { code: "codex.start-failed", category: "unavailable", message: "Codex execution could not be started.", retryable: true, cause };
+}
+
+function capacityReached(limit: number): AppError {
+  return {
+    code: "scheduler.capacity-reached",
+    category: "conflict",
+    message: `The configured concurrency limit (${limit}) has been reached.`,
+    retryable: true,
+    context: { limit: String(limit) }
+  };
 }

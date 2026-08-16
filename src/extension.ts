@@ -17,6 +17,7 @@ import { ValidationCommandSetting, parseSettings } from "./modules/settings/publ
 import {
   AgentEventCoordinator,
   CancelTaskWorkflow,
+  ExecutionCapacityGate,
   ResumeTaskWorkflow,
   StartTaskWorkflow,
   ValidateTaskWorkflow
@@ -45,6 +46,7 @@ export function activate(context: vscode.ExtensionContext): void {
     processError: error => console.error("Codex App Server error", error)
   });
   const executions = new MementoExecutionRepository(context.workspaceState);
+  const capacity = new ExecutionCapacityGate();
   const activity = new ActivityService(
     new MementoActivityRepository(context.workspaceState), clock, ids
   );
@@ -144,13 +146,15 @@ export function activate(context: vscode.ExtensionContext): void {
             agent,
             executions,
             clock,
-            ids
+            ids,
+            capacity
           );
           const started = await workflow.execute({
             taskId: task.id,
             repositoryRoot: workspaceFolder.uri.fsPath,
             worktreeRoot: vscode.Uri.joinPath(storage, "worktrees").fsPath,
-            baseRef: settings.value.baseRef
+            baseRef: settings.value.baseRef,
+            concurrencyLimit: settings.value.concurrencyLimit
           });
           tree.refresh();
           if (!started.ok) {

@@ -1,4 +1,5 @@
 export { SchedulerPolicy } from "./domain/scheduler";
+export { ExecutionCapacityGate } from "./domain/executionCapacityGate";
 export type { SchedulingCandidate } from "./domain/scheduler";
 export { StartTaskWorkflow } from "./application/startTaskWorkflow";
 export type { StartTaskWorkflowCommand } from "./application/startTaskWorkflow";
