@@ -15,6 +15,7 @@ for (const file of sourceFiles(sourceRoot)) {
   for (const specifier of imports) {
     checkDomainIsolation(relative, specifier);
     checkAdapterDirection(relative, specifier);
+    checkInfrastructureDirection(file, relative, specifier);
     checkCrossModuleBoundary(file, relative, specifier);
     checkExternalModuleBoundary(file, relative, specifier);
   }
@@ -46,6 +47,20 @@ function checkAdapterDirection(relative, specifier) {
   const normalized = unix(path.normalize(path.join(path.dirname(relative), specifier)));
   if (normalized.startsWith("src/adapters/")) {
     violations.push(`${relative}: modules cannot import adapter '${specifier}'`);
+  }
+}
+
+function checkInfrastructureDirection(file, relative, specifier) {
+  if (!specifier.startsWith(".")) return;
+  const resolved = unix(path.relative(projectRoot, path.resolve(path.dirname(file), specifier)));
+  if (relative.startsWith("src/modules/") && /src\/(?:host|ui)\//.test(resolved)) {
+    violations.push(`${relative}: modules cannot import host or UI code '${specifier}'`);
+  }
+  if (relative.startsWith("src/adapters/") && /src\/(?:host|ui)\//.test(resolved)) {
+    violations.push(`${relative}: adapters cannot import host or UI code '${specifier}'`);
+  }
+  if (relative.startsWith("src/ui/") && resolved.startsWith("src/adapters/")) {
+    violations.push(`${relative}: UI code cannot import adapter '${specifier}'`);
   }
 }
 

@@ -21,6 +21,8 @@ The extension currently provides the core multi-task execution loop:
 - persisted acyclic prerequisites and a priority-aware queue dispatcher;
 - complete worktree diff review, including committed and untracked changes;
 - explicit merge or squash integration into a clean target repository;
+- immutable reviewed-commit integration and explicit clean-worktree release;
+- credential redaction before activity records are persisted;
 - automated module-boundary checks, unit/contract tests, and VSIX packaging.
 
 Codex remains responsible for reasoning and code changes. This extension owns
@@ -41,7 +43,7 @@ Next milestones:
 1. Add automatic queue dispatch after task completion and capacity changes.
 2. Replace quick-pick activity with a task-detail webview.
 3. Add SQLite migrations and full restart reconciliation.
-4. Add conflict-resolution and safe worktree cleanup workflows.
+4. Add conflict-resolution and explicit retained-branch cleanup workflows.
 5. Add protocol-generation compatibility checks across supported Codex versions.
 
 ## Development
