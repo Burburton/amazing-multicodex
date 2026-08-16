@@ -11,7 +11,12 @@ import { AgentActivityBridge } from "./host/agentActivityBridge";
 import { ApprovalBridge } from "./host/approvalBridge";
 import { ActivityService } from "./modules/activity/public";
 import { ApprovalService } from "./modules/approvals/public";
-import { AgentEventCoordinator, ResumeTaskWorkflow, StartTaskWorkflow } from "./modules/orchestration/public";
+import {
+  AgentEventCoordinator,
+  CancelTaskWorkflow,
+  ResumeTaskWorkflow,
+  StartTaskWorkflow
+} from "./modules/orchestration/public";
 import { CreateTaskHandler, TaskLifecycleService, TaskProps } from "./modules/tasks/public";
 import { SystemClock } from "./shared/core/clock";
 import { CryptoIdGenerator } from "./shared/core/idGenerator";
@@ -198,6 +203,26 @@ export function activate(context: vscode.ExtensionContext): void {
         description: record.kind,
         detail: record.detail
       })), { title: `Activity: ${task.title}`, matchOnDetail: true });
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.cancelTask", async (task?: TaskProps) => {
+      if (!task) {
+        void vscode.window.showErrorMessage("Select a running MultiCodex task to cancel.");
+        return;
+      }
+      const agent = codex.current();
+      if (!agent) {
+        void vscode.window.showErrorMessage("Codex App Server is not connected; resume the task before cancelling it.");
+        return;
+      }
+      const confirmed = await vscode.window.showWarningMessage(
+        `Cancel MultiCodex task '${task.title}'?`,
+        { modal: true },
+        "Cancel Task"
+      );
+      if (confirmed !== "Cancel Task") return;
+      const cancelled = await new CancelTaskWorkflow(lifecycle, agent, executions, clock).execute(task.id);
+      tree.refresh();
+      if (!cancelled.ok) void vscode.window.showErrorMessage(cancelled.error.message);
     })
   );
 

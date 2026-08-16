@@ -21,7 +21,8 @@
     "onCommand:amazingMultiCodex.createTask",
     "onCommand:amazingMultiCodex.startTask",
     "onCommand:amazingMultiCodex.resumeTask",
-    "onCommand:amazingMultiCodex.showActivity"
+    "onCommand:amazingMultiCodex.showActivity",
+    "onCommand:amazingMultiCodex.cancelTask"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -57,6 +58,11 @@
         "command": "amazingMultiCodex.showActivity",
         "title": "MultiCodex: Show Task Activity",
         "icon": "$(history)"
+      },
+      {
+        "command": "amazingMultiCodex.cancelTask",
+        "title": "MultiCodex: Cancel Task",
+        "icon": "$(stop-circle)"
       }
     ],
     "menus": {
@@ -87,6 +93,11 @@
           "command": "amazingMultiCodex.showActivity",
           "when": "view == amazingMultiCodex.tasks",
           "group": "navigation"
+        },
+        {
+          "command": "amazingMultiCodex.cancelTask",
+          "when": "view == amazingMultiCodex.tasks && (viewItem == multicodexTask.running || viewItem == multicodexTask.awaitingApproval)",
+          "group": "inline"
         }
       ]
     }
