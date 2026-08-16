@@ -18,7 +18,7 @@ The extension currently provides the core multi-task execution loop:
 - streamed turn completion, agent response capture, and task-state recovery;
 - modal command and file-change approvals with durable decisions;
 - configurable sequential validation gates with persisted task transitions;
-- persisted acyclic prerequisites and a priority-aware queue dispatcher;
+- persisted acyclic prerequisites and priority-aware automatic queue dispatch;
 - complete worktree diff review, including committed and untracked changes;
 - explicit merge or squash integration into a clean target repository;
 - immutable reviewed-commit integration and explicit clean-worktree release;
@@ -40,11 +40,10 @@ Task board → scheduler → Codex session adapter → isolated worktree
 
 Next milestones:
 
-1. Add automatic queue dispatch after task completion and capacity changes.
-2. Replace quick-pick activity with a task-detail webview.
-3. Add SQLite migrations and full restart reconciliation.
-4. Add conflict-resolution and explicit retained-branch cleanup workflows.
-5. Add protocol-generation compatibility checks across supported Codex versions.
+1. Replace quick-pick activity with a task-detail webview.
+2. Add SQLite migrations and full restart reconciliation.
+3. Add conflict-resolution and explicit retained-branch cleanup workflows.
+4. Add protocol-generation compatibility checks across supported Codex versions.
 
 ## Development
 

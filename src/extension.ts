@@ -74,6 +74,8 @@ export function activate(context: vscode.ExtensionContext): void {
   let coordinator: AgentEventCoordinator | undefined;
   let activityBridge: AgentActivityBridge | undefined;
   let approvalBridge: ApprovalBridge | undefined;
+  let boundAgent: Awaited<ReturnType<CodexProcessSupervisor["start"]>> | undefined;
+  let dispatching: Promise<void> | undefined;
 
   context.subscriptions.push(
     tree,
@@ -117,6 +119,7 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       tree.refresh();
+      void dispatchQueue(false);
       void vscode.window.showInformationMessage(`Queued MultiCodex task: ${title.trim()}`);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.refreshTasks", () => {
@@ -142,60 +145,15 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showErrorMessage(queued.error.message);
         return;
       }
+      void dispatchQueue(false);
       void vscode.window.showInformationMessage(`Queued MultiCodex task: ${task.title}`);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.dispatchQueue", async () => {
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      const storage = context.storageUri;
-      if (!workspaceFolder || workspaceFolder.uri.scheme !== "file" || !storage || storage.scheme !== "file") {
-        void vscode.window.showErrorMessage("Open a local Git workspace before dispatching tasks.");
-        return;
-      }
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: "Dispatching queued MultiCodex tasks",
         cancellable: false
-      }, async () => {
-        try {
-          const settings = readSettings();
-          if (!settings.ok) {
-            void vscode.window.showErrorMessage(settings.error.message);
-            return;
-          }
-          await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(storage, "worktrees"));
-          const agent = await codex.start({
-            cwd: workspaceFolder.uri.fsPath,
-            executable: settings.value.codexExecutable,
-            requestTimeoutMs: settings.value.requestTimeoutMs
-          });
-          bindAgent(agent, settings.value.maxActivityCharacters);
-          const starter = new StartTaskWorkflow(
-            lifecycle, new GitWorkspaceAdapter(new NodeCommandRunner()), agent,
-            executions, clock, ids, capacity, dependencies
-          );
-          const dispatched = await new DispatchQueuedTasksWorkflow(
-            repository, executions, dependencies, new SchedulerPolicy(), starter
-          ).execute({
-            repositoryRoot: workspaceFolder.uri.fsPath,
-            worktreeRoot: vscode.Uri.joinPath(storage, "worktrees").fsPath,
-            baseRef: settings.value.baseRef,
-            concurrencyLimit: settings.value.concurrencyLimit,
-            model: settings.value.defaultModel
-          });
-          tree.refresh();
-          if (!dispatched.ok) {
-            void vscode.window.showErrorMessage(dispatched.error.message);
-            return;
-          }
-          const failed = dispatched.value.failures.length;
-          void vscode.window.showInformationMessage(
-            `Started ${dispatched.value.started.length} queued task(s)${failed ? `; ${failed} failed to start` : ""}.`
-          );
-        } catch (cause) {
-          const message = cause instanceof Error ? cause.message : "Unknown dispatch error.";
-          void vscode.window.showErrorMessage(`Could not dispatch queued tasks: ${message}`);
-        }
-      });
+      }, () => dispatchQueue(true));
     }),
     vscode.commands.registerCommand("amazingMultiCodex.startTask", async (task?: TaskProps) => {
       if (!task) {
@@ -530,14 +488,76 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   );
 
+  function dispatchQueue(notify: boolean): Promise<void> {
+    if (dispatching) return dispatching;
+    dispatching = dispatchQueueOnce(notify).finally(() => { dispatching = undefined; });
+    return dispatching;
+  }
+
+  async function dispatchQueueOnce(notify: boolean): Promise<void> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const storage = context.storageUri;
+    if (!workspaceFolder || workspaceFolder.uri.scheme !== "file" || !storage || storage.scheme !== "file") {
+      if (notify) void vscode.window.showErrorMessage("Open a local Git workspace before dispatching tasks.");
+      return;
+    }
+    try {
+      const listed = await repository.list();
+      if (!listed.ok) throw listed.error;
+      if (!listed.value.some(task => task.snapshot().status === "queued")) {
+        if (notify) void vscode.window.showInformationMessage("No queued MultiCodex tasks are ready to dispatch.");
+        return;
+      }
+      const settings = readSettings();
+      if (!settings.ok) throw settings.error;
+      await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(storage, "worktrees"));
+      const agent = await codex.start({
+        cwd: workspaceFolder.uri.fsPath,
+        executable: settings.value.codexExecutable,
+        requestTimeoutMs: settings.value.requestTimeoutMs
+      });
+      bindAgent(agent, settings.value.maxActivityCharacters);
+      const starter = new StartTaskWorkflow(
+        lifecycle, new GitWorkspaceAdapter(new NodeCommandRunner()), agent,
+        executions, clock, ids, capacity, dependencies
+      );
+      const dispatched = await new DispatchQueuedTasksWorkflow(
+        repository, executions, dependencies, new SchedulerPolicy(), starter
+      ).execute({
+        repositoryRoot: workspaceFolder.uri.fsPath,
+        worktreeRoot: vscode.Uri.joinPath(storage, "worktrees").fsPath,
+        baseRef: settings.value.baseRef,
+        concurrencyLimit: settings.value.concurrencyLimit,
+        model: settings.value.defaultModel
+      });
+      tree.refresh();
+      if (!dispatched.ok) throw dispatched.error;
+      const failed = dispatched.value.failures.length;
+      if (notify || failed) void vscode.window.showInformationMessage(
+        `Started ${dispatched.value.started.length} queued task(s)${failed ? `; ${failed} failed to start` : ""}.`
+      );
+    } catch (cause) {
+      console.error("Could not dispatch queued MultiCodex tasks", cause);
+      if (notify) {
+        const message = cause instanceof Error ? cause.message : typeof cause === "object" && cause && "message" in cause
+          ? String(cause.message) : "Unknown dispatch error.";
+        void vscode.window.showErrorMessage(`Could not dispatch queued tasks: ${message}`);
+      }
+    }
+  }
+
   function bindAgent(
     agent: Awaited<ReturnType<CodexProcessSupervisor["start"]>>,
     maxActivityCharacters: number
   ): void {
+    if (boundAgent === agent) return;
     coordinator?.stop();
     coordinator = new AgentEventCoordinator(agent, executions, lifecycle, clock, {
       error: (message, error) => console.error(message, error),
-      taskChanged: () => tree.refresh()
+      taskChanged: () => {
+        tree.refresh();
+        void dispatchQueue(false);
+      }
     });
     coordinator.start();
     activityBridge?.stop();
@@ -548,6 +568,7 @@ export function activate(context: vscode.ExtensionContext): void {
     approvalBridge?.stop();
     approvalBridge = createApprovalBridge(agent);
     approvalBridge.start();
+    boundAgent = agent;
   }
 
   function createApprovalBridge(agent: Awaited<ReturnType<CodexProcessSupervisor["start"]>>): ApprovalBridge {
