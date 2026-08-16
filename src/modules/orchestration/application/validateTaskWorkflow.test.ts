@@ -97,3 +97,52 @@ test("blocks a validating task when its execution record is missing", async () =
   assert.equal(found.ok && found.value?.snapshot().status, "blocked");
   if (found.ok && found.value) assert.equal(found.value.snapshot().statusReason, "execution.not-found");
 });
+
+test("keeps a task validating when the user cancels validation", async () => {
+  const clock = new FixedClock();
+  const tasks = new InMemoryTaskRepository();
+  const task = Task.create({ id: "task-cancel" as TaskId, title: "Task", now: clock.now() });
+  assert.equal(task.ok, true);
+  if (!task.ok) return;
+  for (const status of ["queued", "preparing", "running", "validating"] as const) {
+    task.value.transition(status, clock.now());
+  }
+  await tasks.save(task.value, -1);
+  const executions = new InMemoryExecutionRepository();
+  await executions.save({
+    id: "execution-cancel" as TaskExecutionId,
+    taskId: "task-cancel" as TaskId,
+    workspace: {
+      id: "workspace-cancel" as WorkspaceId,
+      taskId: "task-cancel" as TaskId,
+      repositoryRoot: "/repo",
+      worktreeRoot: "/worktrees",
+      path: "/worktrees/cancel",
+      branch: "branch",
+      baseRef: "main"
+    },
+    status: "completed",
+    createdAt: clock.now(),
+    updatedAt: clock.now(),
+    version: 0
+  }, -1);
+  const controller = new AbortController();
+  controller.abort();
+  const result = await new ValidateTaskWorkflow(
+    new TaskLifecycleService(tasks, clock),
+    executions,
+    new RunValidationHandler(new PassingCommand(), clock, new FixedIds())
+  ).execute({
+    taskId: "task-cancel" as TaskId,
+    signal: controller.signal,
+    profile: {
+      id: "profile" as ValidationProfileId,
+      mode: "sequential",
+      checks: [{ id: "check" as ValidationCheckId, label: "Check", executable: "check", args: [] }]
+    }
+  });
+
+  assert.equal(result.ok && result.value.status, "cancelled");
+  const found = await tasks.findById("task-cancel" as TaskId);
+  assert.equal(found.ok && found.value?.snapshot().status, "validating");
+});

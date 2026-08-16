@@ -39,6 +39,9 @@ export class ValidateTaskWorkflow {
       await this.tasks.transition(command.taskId, "failed", run.error.code);
       return run;
     }
+    // Cancellation is user intent, not a failed validation. Keep the task in
+    // validating so the same worktree can be checked again without rerunning Codex.
+    if (run.value.status === "cancelled") return run;
     const next = run.value.status === "passed" ? "readyForReview" : "failed";
     const transitioned = await this.tasks.transition(command.taskId, next, `validation-${run.value.status}`);
     return transitioned.ok ? run : transitioned;

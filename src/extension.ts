@@ -375,25 +375,34 @@ export function activate(context: vscode.ExtensionContext): void {
       const result = await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: `Validating MultiCodex task: ${task.title}`,
-        cancellable: false
-      }, () => new ValidateTaskWorkflow(
-        lifecycle,
-        executions,
-        new RunValidationHandler(new NodeCommandRunner(), clock, ids)
-      ).execute({
-        taskId: task.id,
-        profile: {
-          id: "configured" as ValidationProfileId,
-          mode: "sequential",
-          checks: settings.value.validationCommands.map((command, index) => ({
-            id: `configured-${index + 1}` as ValidationCheckId,
-            label: command.label,
-            executable: command.executable,
-            args: command.args,
-            timeoutMs: settings.value.validationTimeoutMs
-          }))
+        cancellable: true
+      }, async (_progress, token) => {
+        const controller = new AbortController();
+        const cancellation = token.onCancellationRequested(() => controller.abort());
+        try {
+          return await new ValidateTaskWorkflow(
+            lifecycle,
+            executions,
+            new RunValidationHandler(new NodeCommandRunner(), clock, ids)
+          ).execute({
+            taskId: task.id,
+            signal: controller.signal,
+            profile: {
+              id: "configured" as ValidationProfileId,
+              mode: "sequential",
+              checks: settings.value.validationCommands.map((command, index) => ({
+                id: `configured-${index + 1}` as ValidationCheckId,
+                label: command.label,
+                executable: command.executable,
+                args: command.args,
+                timeoutMs: settings.value.validationTimeoutMs
+              }))
+            }
+          });
+        } finally {
+          cancellation.dispose();
         }
-      }));
+      });
       tree.refresh();
       if (!result.ok) {
         void vscode.window.showErrorMessage(result.error.message);
@@ -405,7 +414,9 @@ export function activate(context: vscode.ExtensionContext): void {
         summary: `Validation ${result.value.status}`,
         detail: result.value.checks.map(check => `${check.checkId}: ${check.status}`).join("\n")
       });
-      void vscode.window.showInformationMessage(`Validation ${result.value.status}: ${task.title}`);
+      void vscode.window.showInformationMessage(result.value.status === "cancelled"
+        ? `Validation cancelled; '${task.title}' remains ready to validate.`
+        : `Validation ${result.value.status}: ${task.title}`);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.showChanges", async (task?: TaskProps) => {
       if (!task) {
