@@ -9,15 +9,28 @@ for (const file of sourceFiles(sourceRoot)) {
   if (file.endsWith(".test.ts")) continue;
   const relative = unix(path.relative(projectRoot, file));
   const content = fs.readFileSync(file, "utf8");
-  const imports = [...content.matchAll(/\b(?:import|export)\s+(?:[^"']*?\s+from\s+)?["']([^"']+)["']/g)]
-    .map(match => match[1]);
+  const imports = new Set([
+    ...[...content.matchAll(/\b(?:import|export)\s+(?:[^"']*?\s+from\s+)?["']([^"']+)["']/g)]
+      .map(match => match[1]),
+    ...[...content.matchAll(/\b(?:import|require)\s*\(\s*["']([^"']+)["']\s*\)/g)]
+      .map(match => match[1])
+  ]);
 
   for (const specifier of imports) {
     checkDomainIsolation(relative, specifier);
     checkAdapterDirection(relative, specifier);
     checkInfrastructureDirection(file, relative, specifier);
+    checkSharedDirection(file, relative, specifier);
     checkCrossModuleBoundary(file, relative, specifier);
     checkExternalModuleBoundary(file, relative, specifier);
+  }
+}
+
+function checkSharedDirection(file, relative, specifier) {
+  if (!relative.startsWith("src/shared/") || !specifier.startsWith(".")) return;
+  const resolved = unix(path.relative(projectRoot, path.resolve(path.dirname(file), specifier)));
+  if (/^src\/(?:modules|adapters|host|ui)\//.test(resolved)) {
+    violations.push(`${relative}: shared code cannot import outward dependency '${specifier}'`);
   }
 }
 

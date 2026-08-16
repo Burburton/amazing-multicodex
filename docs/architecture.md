@@ -10,11 +10,13 @@ Server adapter, Git worktrees, approvals, validation, review, and explicit
 integration workflows are implemented. Architecture dependencies are enforced
 by `scripts/check-architecture.js` in `npm run check`.
 
-Persistence currently uses VS Code `workspaceState` adapters behind repository
-ports. This is an intentional transitional implementation, not a change to the
-SQLite decision in section 10. Automatic lifecycle-driven dispatch,
-transactional persistence/outbox, full restart reconciliation, safe workspace
-cleanup, and the task-detail webview remain future increments.
+Persistence currently uses validated VS Code `workspaceState` adapters behind
+repository ports, with optimistic versions and serialized read-modify-write
+operations. This is an intentional transitional implementation, not a change
+to the SQLite decision in section 10. Lifecycle-driven dispatch, restart
+reconciliation, safe workspace cleanup, and a reusable task-detail webview are
+implemented. Transactional persistence/outbox and live Codex thread-state
+reconciliation remain future increments.
 
 ## 1. Purpose
 
