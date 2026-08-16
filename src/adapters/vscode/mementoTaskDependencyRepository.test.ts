@@ -47,3 +47,26 @@ test("refuses to persist invalid dependency graphs", async () => {
   assert.equal(replaced.ok, false);
   if (!replaced.ok) assert.equal(replaced.error.code, "task.dependency-graph-invalid");
 });
+
+test("rejects oversized task identifiers before graph construction", async () => {
+  const oversizedId = "x".repeat(513);
+  const repository = new MementoTaskDependencyRepository(new FakeState([
+    { taskId: oversizedId, prerequisiteId: "task" }
+  ]));
+
+  const listed = await repository.list();
+  assert.equal(listed.ok, false);
+  if (!listed.ok) assert.equal(listed.error.code, "task.dependency-state-invalid");
+});
+
+test("refuses to persist an excessive number of dependency edges", async () => {
+  const repository = new MementoTaskDependencyRepository(new FakeState());
+  const edges = Array.from({ length: 10_001 }, (_, index) => ({
+    taskId: `task-${index}` as TaskId,
+    prerequisiteId: `prerequisite-${index}` as TaskId
+  }));
+
+  const replaced = await repository.replace(edges);
+  assert.equal(replaced.ok, false);
+  if (!replaced.ok) assert.equal(replaced.error.code, "task.dependency-graph-invalid");
+});

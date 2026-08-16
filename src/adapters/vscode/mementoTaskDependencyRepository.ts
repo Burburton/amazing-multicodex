@@ -3,13 +3,15 @@ import { KeyValueState } from "../../shared/ports/keyValueState";
 import { TaskDependency, TaskDependencyGraph, TaskDependencyRepository } from "../../modules/tasks/public";
 
 const STORAGE_KEY = "amazingMultiCodex.dependencies.v1";
+const MAX_DEPENDENCIES = 10_000;
+const MAX_TASK_ID_LENGTH = 512;
 
 export class MementoTaskDependencyRepository implements TaskDependencyRepository {
   constructor(private readonly state: KeyValueState) {}
   async list(): Promise<Result<readonly TaskDependency[]>> {
     try {
       const stored = this.state.get<unknown>(STORAGE_KEY, []);
-      if (!Array.isArray(stored) || !stored.every(isDependency)) {
+      if (!Array.isArray(stored) || stored.length > MAX_DEPENDENCIES || !stored.every(isDependency)) {
         return err(corruptState());
       }
       const dependencies = stored.map(item => ({ taskId: item.taskId, prerequisiteId: item.prerequisiteId }));
@@ -31,6 +33,7 @@ export class MementoTaskDependencyRepository implements TaskDependencyRepository
 }
 
 function isValidGraph(dependencies: readonly TaskDependency[]): boolean {
+  if (dependencies.length > MAX_DEPENDENCIES || !dependencies.every(isDependency)) return false;
   const keys = new Set<string>();
   for (const dependency of dependencies) {
     const key = `${dependency.taskId}\0${dependency.prerequisiteId}`;
@@ -50,8 +53,10 @@ function isDependency(value: unknown): value is TaskDependency {
   const candidate = value as Record<string, unknown>;
   return typeof candidate.taskId === "string"
     && candidate.taskId.length > 0
+    && candidate.taskId.length <= MAX_TASK_ID_LENGTH
     && typeof candidate.prerequisiteId === "string"
-    && candidate.prerequisiteId.length > 0;
+    && candidate.prerequisiteId.length > 0
+    && candidate.prerequisiteId.length <= MAX_TASK_ID_LENGTH;
 }
 
 function corruptState(): AppError {
