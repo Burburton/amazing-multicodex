@@ -46,8 +46,12 @@ export class JsonLineTransport implements JsonRpcTransport {
 function isMessage(value: unknown): value is JsonRpcMessage {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
-  if ("method" in record && typeof record.method !== "string") return false;
-  if ("id" in record && typeof record.id !== "number" && typeof record.id !== "string") return false;
-  return typeof record.method === "string" || "result" in record || "error" in record;
+  const hasId = "id" in record;
+  const validId = typeof record.id === "number" || typeof record.id === "string";
+  if (typeof record.method === "string") return !hasId || validId;
+  if (!hasId || !validId) return false;
+  if ("result" in record) return !("error" in record);
+  if (!("error" in record) || !record.error || typeof record.error !== "object") return false;
+  const error = record.error as Record<string, unknown>;
+  return typeof error.code === "number" && typeof error.message === "string";
 }
-

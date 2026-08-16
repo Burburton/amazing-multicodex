@@ -18,12 +18,17 @@ test("reads and writes newline-delimited protocol messages", async () => {
 
   input.write('{"method":"turn/started","params":{"id":"1"}}\n');
   input.write("not-json\n");
+  input.write('{"id":2,"error":{"message":"missing code"}}\n');
+  input.write('{"result":"missing id"}\n');
   transport.send({ id: 4, method: "thread/start", params: {} });
   await new Promise(resolve => setImmediate(resolve));
 
   assert.deepEqual(received, [{ method: "turn/started", params: { id: "1" } }]);
-  assert.deepEqual(malformed, ["not-json"]);
+  assert.deepEqual(malformed, [
+    "not-json",
+    '{"id":2,"error":{"message":"missing code"}}',
+    '{"result":"missing id"}'
+  ]);
   assert.equal(written, '{"id":4,"method":"thread/start","params":{}}\n');
   transport.dispose();
 });
-
