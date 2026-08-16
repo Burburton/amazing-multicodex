@@ -14,6 +14,7 @@ interface StoredActivity extends Omit<ActivityRecord, "occurredAt"> {
 
 const STORAGE_KEY = "amazingMultiCodex.activity.v1";
 const MAX_RECORDS = 2_000;
+const MAX_TOTAL_CHARACTERS = 2_000_000;
 
 export class MementoActivityRepository implements ActivityRepository {
   private readonly writes = new AsyncOperationQueue();
@@ -30,6 +31,11 @@ export class MementoActivityRepository implements ActivityRepository {
     const complete: ActivityRecord = { ...record, sequence };
     records.value.push({ ...complete, occurredAt: complete.occurredAt.toISOString() });
     if (records.value.length > MAX_RECORDS) records.value.splice(0, records.value.length - MAX_RECORDS);
+    let characters = records.value.reduce((total, item) => total + item.summary.length + (item.detail?.length ?? 0), 0);
+    while (characters > MAX_TOTAL_CHARACTERS && records.value.length > 1) {
+      const removed = records.value.shift();
+      if (removed) characters -= removed.summary.length + (removed.detail?.length ?? 0);
+    }
     try {
       await this.state.update(STORAGE_KEY, records.value);
       return ok(complete);

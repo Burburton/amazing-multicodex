@@ -51,3 +51,16 @@ test("serializes concurrent appends and assigns unique sequences", async () => {
   assert.equal(records.ok && records.value.length, 2);
   if (records.ok) assert.deepEqual(records.value.map(record => record.sequence), [2, 1]);
 });
+
+test("evicts oldest activity when the total character budget is exceeded", async () => {
+  const repository = new MementoActivityRepository(new FakeState());
+  for (const summary of ["first", "second", "third"]) {
+    await repository.append({
+      id: summary as ActivityId, taskId: "task-1" as TaskId, kind: "agentMessage", summary,
+      detail: "x".repeat(800_000), occurredAt: new Date("2026-08-15T12:00:00Z")
+    });
+  }
+  const records = await repository.listByTask("task-1" as TaskId);
+  assert.equal(records.ok, true);
+  if (records.ok) assert.deepEqual(records.value.map(record => record.summary), ["third", "second"]);
+});
