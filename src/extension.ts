@@ -122,6 +122,23 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("amazingMultiCodex.refreshTasks", () => {
       tree.refresh();
     }),
+    vscode.commands.registerCommand("amazingMultiCodex.queueTask", async (task?: TaskProps) => {
+      if (!task) {
+        void vscode.window.showErrorMessage("Select a draft, failed, cancelled, or blocked task to queue.");
+        return;
+      }
+      if (task.status === "blocked" && task.statusReason?.startsWith("integration.")) {
+        void vscode.window.showErrorMessage("Retry this task with the Integrate Task command.");
+        return;
+      }
+      const queued = await lifecycle.transition(task.id, "queued", "user-retry");
+      tree.refresh();
+      if (!queued.ok) {
+        void vscode.window.showErrorMessage(queued.error.message);
+        return;
+      }
+      void vscode.window.showInformationMessage(`Queued MultiCodex task: ${task.title}`);
+    }),
     vscode.commands.registerCommand("amazingMultiCodex.dispatchQueue", async () => {
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
       const storage = context.storageUri;
