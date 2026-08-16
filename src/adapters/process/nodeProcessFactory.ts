@@ -14,6 +14,25 @@ export class NodeProcessFactory implements ProcessFactory {
       child.kill();
       throw new Error("Spawned process does not expose stdio streams.");
     }
+    let closed = false;
+    let terminationRequested = false;
+    let forceKillTimer: NodeJS.Timeout | undefined;
+    child.once("close", () => {
+      closed = true;
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+    });
+
+    const signal = (processSignal: NodeJS.Signals): void => {
+      if (process.platform !== "win32" && child.pid !== undefined) {
+        try {
+          process.kill(-child.pid, processSignal);
+          return;
+        } catch {
+          // Fall back to the direct child when a process group is unavailable.
+        }
+      }
+      child.kill(processSignal);
+    };
     return {
       stdin: child.stdin,
       stdout: child.stdout,
@@ -29,16 +48,13 @@ export class NodeProcessFactory implements ProcessFactory {
         return () => child.off("error", listener);
       },
       terminate() {
-        if (child.killed) return;
-        if (process.platform !== "win32" && child.pid !== undefined) {
-          try {
-            process.kill(-child.pid, "SIGTERM");
-            return;
-          } catch {
-            // Fall back to the direct child when a process group is unavailable.
-          }
-        }
-        child.kill("SIGTERM");
+        if (closed || terminationRequested) return;
+        terminationRequested = true;
+        signal("SIGTERM");
+        forceKillTimer = setTimeout(() => {
+          if (!closed) signal("SIGKILL");
+        }, 1_000);
+        forceKillTimer.unref();
       }
     };
   }
