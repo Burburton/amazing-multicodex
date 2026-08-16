@@ -114,5 +114,10 @@ function integrationError(code: string, message: string, retryable = false, caus
 }
 
 function canonicalPatch(patch: string): string {
-  return patch.split(/(?=^diff --git )/m).map(block => block.trim()).filter(Boolean).sort().join("\n");
+  return patch
+    .split(/(?=^diff --git )/m)
+    .map(block => block.replace(/^\n+|\n+$/g, ""))
+    .filter(Boolean)
+    .sort()
+    .join("\n");
 }
