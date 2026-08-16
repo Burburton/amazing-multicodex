@@ -36,6 +36,7 @@
     "onView:amazingMultiCodex.tasks",
     "onCommand:amazingMultiCodex.createTask",
     "onCommand:amazingMultiCodex.editTask",
+    "onCommand:amazingMultiCodex.refreshTasks",
     "onCommand:amazingMultiCodex.showRuntimeStatus",
     "onCommand:amazingMultiCodex.queueTask",
     "onCommand:amazingMultiCodex.dispatchQueue",
@@ -364,8 +365,9 @@
   "scripts": {
     "compile": "node scripts/clean-out.js && tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "check": "tsc --noEmit -p ./ && npm run check:architecture",
+    "check": "tsc --noEmit -p ./ && npm run check:architecture && npm run check:manifest",
     "check:architecture": "node scripts/check-architecture.js",
+    "check:manifest": "node scripts/check-manifest.js",
     "test": "npm run compile && node --test \"out/**/*.test.js\"",
     "package": "npm run compile && vsce package --no-dependencies"
   },
