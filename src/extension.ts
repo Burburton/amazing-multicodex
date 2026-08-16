@@ -406,7 +406,7 @@ export function activate(context: vscode.ExtensionContext): void {
       });
     }),
     vscode.commands.registerCommand("amazingMultiCodex.resumeTask", async (task?: TaskProps) => {
-      task = await selectTask(task, candidate => candidate.status === "running", "Resume a running task");
+      task = await selectTask(task, candidate => candidate.status === "running", "Reconnect to a disconnected running task");
       if (!task) return;
       if (connectedTasks.has(task.id)) {
         void vscode.window.showInformationMessage(`'${task.title}' is already running in the connected Codex App Server.`);

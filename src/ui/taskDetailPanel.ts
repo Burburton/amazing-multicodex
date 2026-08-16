@@ -135,7 +135,7 @@ function actionsFor(
     case "queued": return [{ id: "start", label: "Start now" }];
     case "running": return [
       { id: "steer", label: "Send follow-up" },
-      { id: "resume", label: "Resume" },
+      { id: "resume", label: "Reconnect / resume" },
       { id: "cancel", label: "Cancel" }
     ];
     case "awaitingApproval": return [{ id: "cancel", label: "Cancel" }];

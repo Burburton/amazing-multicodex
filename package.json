@@ -201,7 +201,7 @@
       },
       {
         "command": "amazingMultiCodex.resumeTask",
-        "title": "MultiCodex: Resume Task",
+        "title": "MultiCodex: Reconnect / Resume Task",
         "icon": "$(debug-continue)"
       },
       {

@@ -96,8 +96,10 @@ The normal task flow is:
 3. Queue the task. Ready tasks dispatch automatically up to the configured
    concurrency limit.
 4. Open task details to follow execution and activity. Command and file-change
-   approval requests appear as modal VS Code prompts. While a connected task is
-   running, use `Send Follow-up` to clarify priorities without starting another turn.
+approval requests appear as modal VS Code prompts. While a connected task is
+running, use `Send Follow-up` to clarify priorities without starting another turn.
+After reloading VS Code or losing the Codex connection, use `Reconnect / Resume`
+on a task that still shows as running.
 5. Run validation, inspect the complete worktree diff, and integrate it with a
    merge or squash after review.
 6. Release the isolated worktree after the task is completed or cancelled.
