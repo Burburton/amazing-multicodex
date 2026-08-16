@@ -102,6 +102,11 @@ export function activate(context: vscode.ExtensionContext): void {
         prompt: "Optional task context",
         placeHolder: "Constraints, acceptance criteria, or relevant notes"
       });
+      const criteriaInput = await vscode.window.showInputBox({
+        prompt: "Optional acceptance criteria (separate multiple items with semicolons)",
+        placeHolder: "Tests pass; documentation updated"
+      });
+      const acceptanceCriteria = criteriaInput?.split(";").map(item => item.trim()).filter(Boolean);
       const priority = await vscode.window.showQuickPick<{
         label: string;
         description: string;
@@ -113,7 +118,7 @@ export function activate(context: vscode.ExtensionContext): void {
         { label: "Low", description: "Run after normal tasks", priority: "low" }
       ], { placeHolder: "Choose a scheduling priority" });
       if (!priority) return;
-      const created = await createTask.execute({ title, description, priority: priority.priority });
+      const created = await createTask.execute({ title, description, acceptanceCriteria, priority: priority.priority });
       if (!created.ok) {
         void vscode.window.showErrorMessage(created.error.message);
         return;
@@ -423,6 +428,7 @@ export function activate(context: vscode.ExtensionContext): void {
         summary: `Integrated with ${integrated.value.strategy}`,
         detail: integrated.value.targetCommit
       });
+      void dispatchQueue(false);
       void vscode.window.showInformationMessage(`Integrated MultiCodex task: ${task.title}`);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.addDependency", async (task?: TaskProps) => {
