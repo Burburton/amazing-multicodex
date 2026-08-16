@@ -22,6 +22,9 @@ export class GitIntegrationAdapter implements IntegrationPort {
     if (cleanTarget.value.stdout.trim()) {
       return err(integrationError("integration.target-dirty", "Target repository has uncommitted changes."));
     }
+    const originalIndex = await this.git(input.workspace.path, ["write-tree"]);
+    if (!originalIndex.ok) return originalIndex;
+    const originalIndexTree = originalIndex.value.stdout.trim();
     const added = await this.git(input.workspace.path, ["add", "-A"]);
     if (!added.ok) return added;
     const currentPatch = await this.git(input.workspace.path, [
@@ -29,8 +32,8 @@ export class GitIntegrationAdapter implements IntegrationPort {
     ]);
     if (!currentPatch.ok) return currentPatch;
     if (canonicalPatch(currentPatch.value.stdout) !== canonicalPatch(input.reviewedPatch)) {
-      const unstaged = await this.git(input.workspace.path, ["reset", input.workspace.baseRef]);
-      if (!unstaged.ok) return unstaged;
+      const restored = await this.git(input.workspace.path, ["read-tree", originalIndexTree]);
+      if (!restored.ok) return restored;
       return err(integrationError(
         "integration.review-stale",
         "Task changes no longer match the reviewed diff. Review the latest changes before integrating.",

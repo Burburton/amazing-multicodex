@@ -18,7 +18,7 @@ const success = (stdout = "", exitCode = 0): CommandResult => ({ exitCode, signa
 test("commits pending task changes and merges only into a clean target", async () => {
   const commands = new Commands();
   commands.results.push(
-    success(), success(), success(), success("", 1), success(), success("source\n"), success(), success("target\n")
+    success(), success("index-tree\n"), success(), success(), success("", 1), success(), success("source\n"), success(), success("target\n")
   );
   const result = await new GitIntegrationAdapter(commands).integrate({
     workspace: {
@@ -37,13 +37,13 @@ test("commits pending task changes and merges only into a clean target", async (
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.value.targetCommit, "target");
-  assert.deepEqual(commands.calls[6].args, ["merge", "--no-ff", "source", "-m", "Integrate task"]);
+  assert.deepEqual(commands.calls[7].args, ["merge", "--no-ff", "source", "-m", "Integrate task"]);
 });
 
 test("squashes the resolved source commit rather than the mutable branch name", async () => {
   const commands = new Commands();
   commands.results.push(
-    success(), success(), success(), success("", 0), success("source-sha\n"), success(), success(), success("target-sha\n")
+    success(), success("index-tree\n"), success(), success(), success("", 0), success("source-sha\n"), success(), success(), success("target-sha\n")
   );
   const result = await new GitIntegrationAdapter(commands).integrate({
     workspace: {
@@ -55,12 +55,12 @@ test("squashes the resolved source commit rather than the mutable branch name", 
   });
 
   assert.equal(result.ok, true);
-  assert.deepEqual(commands.calls[5].args, ["merge", "--squash", "source-sha"]);
+  assert.deepEqual(commands.calls[6].args, ["merge", "--squash", "source-sha"]);
 });
 
 test("rejects a workspace whose HEAD still equals its immutable base", async () => {
   const commands = new Commands();
-  commands.results.push(success(), success(), success(), success("", 0), success("base-sha\n"));
+  commands.results.push(success(), success("index-tree\n"), success(), success(), success("", 0), success("base-sha\n"));
   const result = await new GitIntegrationAdapter(commands).integrate({
     workspace: {
       id: "workspace" as WorkspaceId, taskId: "task" as TaskId,
@@ -78,7 +78,7 @@ test("rejects a workspace whose HEAD still equals its immutable base", async () 
 test("restores the clean target after a merge failure", async () => {
   const commands = new Commands();
   const failed = { ...success("", 1), stderr: "conflict" };
-  commands.results.push(success(), success(), success(), success("", 0), success("source-sha\n"), failed, success());
+  commands.results.push(success(), success("index-tree\n"), success(), success(), success("", 0), success("source-sha\n"), failed, success());
   const result = await new GitIntegrationAdapter(commands).integrate({
     workspace: {
       id: "workspace" as WorkspaceId, taskId: "task" as TaskId,
@@ -96,7 +96,7 @@ test("restores the clean target after a merge failure", async () => {
 test("reports when a failed integration cannot restore the target", async () => {
   const commands = new Commands();
   const failed = { ...success("", 1), stderr: "conflict" };
-  commands.results.push(success(), success(), success(), success("", 0), success("source-sha\n"), failed, failed);
+  commands.results.push(success(), success("index-tree\n"), success(), success(), success("", 0), success("source-sha\n"), failed, failed);
   const result = await new GitIntegrationAdapter(commands).integrate({
     workspace: {
       id: "workspace" as WorkspaceId, taskId: "task" as TaskId,
@@ -112,7 +112,7 @@ test("reports when a failed integration cannot restore the target", async () => 
 
 test("rejects changes made after review and unstages the workspace", async () => {
   const commands = new Commands();
-  commands.results.push(success(), success(), success("current patch\n"), success());
+  commands.results.push(success(), success("original-index\n"), success(), success("current patch\n"), success());
   const result = await new GitIntegrationAdapter(commands).integrate({
     workspace: {
       id: "workspace" as WorkspaceId, taskId: "task" as TaskId,
@@ -125,7 +125,7 @@ test("rejects changes made after review and unstages the workspace", async () =>
 
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.error.code, "integration.review-stale");
-  assert.deepEqual(commands.calls.at(-1)?.args, ["reset", "base"]);
+  assert.deepEqual(commands.calls.at(-1)?.args, ["read-tree", "original-index"]);
   assert.equal(commands.calls.some(call => call.args[0] === "merge"), false);
 });
 
@@ -167,6 +167,7 @@ test("does not normalize meaningful trailing whitespace in reviewed patches", as
   const commands = new Commands();
   commands.results.push(
     success(),
+    success("index-tree\n"),
     success(),
     success("diff --git a/file b/file\n@@ -0,0 +1 @@\n+ \n"),
     success()
