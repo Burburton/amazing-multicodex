@@ -142,7 +142,7 @@ export function activate(context: vscode.ExtensionContext): void {
     connectedTasks.clear();
     if (affected > 0) {
       void vscode.window.showWarningMessage(
-        `${message} ${affected} running task(s) can be continued with MultiCodex: Resume Task.`
+        `${message} ${affected} running task(s) can be continued with MultiCodex: Reconnect / Resume Task.`
       );
     }
   }
