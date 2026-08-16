@@ -865,7 +865,9 @@ export function activate(context: vscode.ExtensionContext): void {
           `Started ${result.value.started.length} queued task(s), but ${failed} failed: ${details}${remainder}`
         );
       } else if (notify) {
-        void vscode.window.showInformationMessage(`Started ${result.value.started.length} queued task(s).`);
+        void vscode.window.showInformationMessage(result.value.started.length > 0
+          ? `Started ${result.value.started.length} queued task(s).`
+          : "Queued tasks exist, but none are currently runnable. Check prerequisites and the concurrency limit.");
       }
     } catch (cause) {
       for (const taskId of connectionCandidates) connectedTasks.delete(taskId);
@@ -915,13 +917,29 @@ export function activate(context: vscode.ExtensionContext): void {
   function createApprovalBridge(agent: Awaited<ReturnType<CodexProcessSupervisor["start"]>>): ApprovalBridge {
     return new ApprovalBridge(agent, executions, approvals, lifecycle, {
       async decide(approval) {
+        const requested = await activity.record({
+          taskId: approval.taskId,
+          kind: "approval",
+          summary: `Approval requested: ${approval.title}`,
+          detail: `Risk: ${approval.risk}`
+        });
+        if (!requested.ok) console.error("Could not record approval request activity", requested.error);
+        void taskDetails.refresh(approval.taskId);
         const selection = await vscode.window.showWarningMessage(
           approval.detail ? `${approval.title}\n\n${approval.detail}` : approval.title,
           { modal: true },
           "Approve",
           "Decline"
         );
-        return selection === "Approve" ? "approved" : selection === "Decline" ? "declined" : "cancelled";
+        const decision = selection === "Approve" ? "approved" : selection === "Decline" ? "declined" : "cancelled";
+        const recorded = await activity.record({
+          taskId: approval.taskId,
+          kind: "approval",
+          summary: `Approval ${decision}: ${approval.title}`,
+          detail: `Risk: ${approval.risk}`
+        });
+        if (!recorded.ok) console.error("Could not record approval decision activity", recorded.error);
+        return decision;
       }
     }, {
       error: (message, cause) => console.error(message, cause),
