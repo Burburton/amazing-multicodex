@@ -83,6 +83,7 @@ export class MementoExecutionRepository implements ExecutionRepository {
     if (!isStoredExecution(stored)) return err(invalidExecution());
     if (index === -1) records.value.unshift(stored);
     else records.value[index] = stored;
+    if (!hasConsistentAssociations(records.value)) return err(invalidExecution());
     const compacted = compactExecutionHistory(records.value);
     try {
       await this.state.update(STORAGE_KEY, compacted);
@@ -101,7 +102,8 @@ export class MementoExecutionRepository implements ExecutionRepository {
   private records(): Result<StoredExecution[]> {
     try {
       const stored = this.state.get<unknown>(STORAGE_KEY, []);
-      if (!Array.isArray(stored) || !stored.every(isStoredExecution) || !hasUniqueIds(stored)) return err(corruptState());
+      if (!Array.isArray(stored) || !stored.every(isStoredExecution)
+        || !hasUniqueIds(stored) || !hasConsistentAssociations(stored)) return err(corruptState());
       return ok([...stored]);
     } catch (cause) {
       return err(persistenceFailure(cause));
@@ -154,6 +156,23 @@ function boundedString(value: unknown, max: number): value is string {
 
 function hasUniqueIds(records: readonly StoredExecution[]): boolean {
   return new Set(records.map(record => record.id)).size === records.length;
+}
+
+function hasConsistentAssociations(records: readonly StoredExecution[]): boolean {
+  const activeTasks = new Set<string>();
+  const agentTurns = new Set<string>();
+  for (const record of records) {
+    if (["prepared", "running"].includes(record.status)) {
+      if (activeTasks.has(record.taskId)) return false;
+      activeTasks.add(record.taskId);
+    }
+    if (record.agent) {
+      const key = `${record.agent.threadId}\0${record.agent.turnId}`;
+      if (agentTurns.has(key)) return false;
+      agentTurns.add(key);
+    }
+  }
+  return true;
 }
 
 function toStored(record: TaskExecutionRecord): StoredExecution {

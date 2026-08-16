@@ -69,6 +69,49 @@ test("rejects duplicate persisted execution identities", async () => {
   if (!listed.ok) assert.equal(listed.error.code, "execution.state-invalid");
 });
 
+test("rejects multiple active executions for one task", async () => {
+  const base = {
+    taskId: "task-1",
+    workspace: {
+      id: "workspace-1", taskId: "task-1", repositoryRoot: "/repo",
+      worktreeRoot: "/worktrees", path: "/worktrees/one", branch: "branch", baseRef: "main"
+    },
+    status: "running", createdAt: "2026-08-15T12:00:00.000Z",
+    updatedAt: "2026-08-15T12:00:00.000Z", version: 0
+  };
+  const repository = new MementoExecutionRepository(new FakeState([
+    { ...base, id: "execution-1" },
+    { ...base, id: "execution-2", workspace: { ...base.workspace, id: "workspace-2" } }
+  ]));
+
+  const active = await repository.listActive();
+  assert.equal(active.ok, false);
+  if (!active.ok) assert.equal(active.error.code, "execution.state-invalid");
+});
+
+test("rejects duplicate persisted Codex turn associations", async () => {
+  const base = {
+    taskId: "task-1",
+    workspace: {
+      id: "workspace-1", taskId: "task-1", repositoryRoot: "/repo",
+      worktreeRoot: "/worktrees", path: "/worktrees/one", branch: "branch", baseRef: "main"
+    },
+    agent: { executionId: "agent-1", threadId: "thread-1", turnId: "turn-1" },
+    status: "completed", createdAt: "2026-08-15T12:00:00.000Z",
+    updatedAt: "2026-08-15T12:00:00.000Z", version: 0
+  };
+  const repository = new MementoExecutionRepository(new FakeState([
+    { ...base, id: "execution-1" },
+    { ...base, id: "execution-2", taskId: "task-2", workspace: {
+      ...base.workspace, id: "workspace-2", taskId: "task-2"
+    } }
+  ]));
+
+  const active = await repository.listActive();
+  assert.equal(active.ok, false);
+  if (!active.ok) assert.equal(active.error.code, "execution.state-invalid");
+});
+
 test("serializes concurrent writes so different executions are not lost", async () => {
   const repository = new MementoExecutionRepository(new FakeState());
   const base = {
