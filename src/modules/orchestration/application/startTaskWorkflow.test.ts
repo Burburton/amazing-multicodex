@@ -140,6 +140,42 @@ test("marks a prepared execution failed when Codex cannot start", async () => {
   assert.equal(task.ok && task.value?.snapshot().status, "blocked");
 });
 
+test("reports when a startup failure cannot close its active execution record", async () => {
+  const clock = new FixedClock();
+  const tasks = new InMemoryTaskRepository();
+  const created = Task.create({ id: "task-compensation" as TaskId, title: "Failure", now: clock.now() });
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  created.value.transition("queued", clock.now());
+  await tasks.save(created.value, -1);
+  const agent = new FakeAgent();
+  agent.failStart = true;
+  let saves = 0;
+  const persistenceError: AppError = {
+    code: "execution.persistence-failed", category: "unavailable", message: "failed", retryable: true
+  };
+  const executions = {
+    findActiveByTask: async () => ok(undefined),
+    listActive: async () => ok([]),
+    save: async () => ++saves === 1 ? ok(undefined) : err(persistenceError)
+  };
+
+  const result = await new StartTaskWorkflow(
+    new TaskLifecycleService(tasks, clock), new FakeWorkspaces(), agent, executions as never, clock,
+    new SequenceIds(), new ExecutionCapacityGate(),
+    new TaskDependencyService(new InMemoryTaskDependencyRepository(), tasks)
+  ).execute({
+    taskId: "task-compensation" as TaskId, repositoryRoot: "/repo", worktreeRoot: "/worktrees",
+    baseRef: "main", concurrencyLimit: 1
+  });
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.error.code, "execution.compensation-failed");
+    assert.match(result.error.message, /Reload the window/);
+  }
+});
+
 test("releases a newly prepared worktree when execution persistence fails", async () => {
   const clock = new FixedClock();
   const tasks = new InMemoryTaskRepository();

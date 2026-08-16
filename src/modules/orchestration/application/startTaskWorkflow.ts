@@ -96,27 +96,33 @@ export class StartTaskWorkflow {
       execution = { ...execution, agent, status: "running", updatedAt: this.clock.now(), version: 1 };
       const updated = await this.executions.save(execution, 0);
       if (!updated.ok) {
-        await this.agents.interrupt(agent);
-        await this.failExecution({ ...execution, agent: undefined, status: "prepared", version: 0 });
+        let interruption: AppError | undefined;
+        try { await this.agents.interrupt(agent); } catch (cause) { interruption = interruptFailed(cause); }
+        const failed = await this.failExecution({ ...execution, agent: undefined, status: "prepared", version: 0 });
         await this.tasks.transition(command.taskId, "blocked", updated.error.code);
-        return updated;
+        const compensation = failed.ok ? interruption : failed.error;
+        return compensation ? err(compensationFailed(updated.error, compensation)) : updated;
       }
       const running = await this.tasks.transition(command.taskId, "running");
       if (!running.ok) {
-        await this.agents.interrupt(agent);
-        await this.failExecution(execution);
-        return running;
+        let interruption: AppError | undefined;
+        try { await this.agents.interrupt(agent); } catch (cause) { interruption = interruptFailed(cause); }
+        const failed = await this.failExecution(execution);
+        await this.tasks.transition(command.taskId, "blocked", running.error.code);
+        const compensation = failed.ok ? interruption : failed.error;
+        return compensation ? err(compensationFailed(running.error, compensation)) : running;
       }
       return ok(execution);
     } catch (cause) {
-      await this.failExecution(execution);
+      const failed = await this.failExecution(execution);
       await this.tasks.transition(command.taskId, "blocked", "codex.start-failed");
-      return err(startFailed(cause));
+      const primary = startFailed(cause);
+      return failed.ok ? err(primary) : err(compensationFailed(primary, failed.error));
     }
   }
 
-  private async failExecution(execution: TaskExecutionRecord): Promise<void> {
-    await this.executions.save({
+  private failExecution(execution: TaskExecutionRecord): Promise<Result<void>> {
+    return this.executions.save({
       ...execution,
       status: "failed",
       updatedAt: this.clock.now(),
@@ -172,5 +178,25 @@ function cleanupFailed(path: string, persistenceFailure: AppError, releaseFailur
     retryable: false,
     context: { path },
     cause: { persistenceFailure, releaseFailure }
+  };
+}
+
+function compensationFailed(primary: AppError, compensation: AppError): AppError {
+  return {
+    code: "execution.compensation-failed",
+    category: "unavailable",
+    message: "Task startup failed and its active execution record could not be closed. Reload the window to run recovery before retrying.",
+    retryable: false,
+    cause: { primary, compensation }
+  };
+}
+
+function interruptFailed(cause: unknown): AppError {
+  return {
+    code: "codex.interrupt-failed",
+    category: "unavailable",
+    message: "The started Codex turn could not be interrupted during rollback.",
+    retryable: true,
+    cause
   };
 }
