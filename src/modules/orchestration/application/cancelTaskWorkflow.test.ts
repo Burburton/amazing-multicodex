@@ -93,3 +93,35 @@ test("refuses to interrupt an execution while its task is still preparing", asyn
   if (!result.ok) assert.equal(result.error.code, "task.not-cancellable");
   assert.equal(agent.interrupted, undefined);
 });
+
+test("repairs task state when execution cancellation was already persisted", async () => {
+  const clock = new FixedClock();
+  const tasks = new InMemoryTaskRepository();
+  const task = Task.create({ id: "task-repair" as TaskId, title: "Task", now: clock.now() });
+  assert.equal(task.ok, true);
+  if (!task.ok) return;
+  for (const status of ["queued", "preparing", "running"] as const) task.value.transition(status, clock.now());
+  await tasks.save(task.value, -1);
+  const executions = new InMemoryExecutionRepository();
+  await executions.save({
+    id: "execution-repair" as TaskExecutionId,
+    taskId: "task-repair" as TaskId,
+    workspace: {
+      id: "workspace-repair" as WorkspaceId, taskId: "task-repair" as TaskId,
+      repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/repair",
+      branch: "branch", baseRef: "base"
+    },
+    status: "cancelled",
+    createdAt: clock.now(), updatedAt: clock.now(), version: 1
+  }, -1);
+  const agent = new InterruptingAgent();
+
+  const result = await new CancelTaskWorkflow(
+    new TaskLifecycleService(tasks, clock), agent, executions, clock
+  ).execute("task-repair" as TaskId);
+
+  assert.equal(result.ok, true);
+  assert.equal(agent.interrupted, undefined);
+  const found = await tasks.findById("task-repair" as TaskId);
+  assert.equal(found.ok && found.value?.snapshot().status, "cancelled");
+});

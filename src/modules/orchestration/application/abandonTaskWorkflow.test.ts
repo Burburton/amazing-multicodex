@@ -53,3 +53,31 @@ test("refuses to abandon a task that is not running", async () => {
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.error.code, "task.not-abandonable");
 });
+
+test("repairs an offline task after execution cancellation was persisted", async () => {
+  const clock = new FixedClock();
+  const repository = new InMemoryTaskRepository();
+  const created = Task.create({ id: "repair" as TaskId, title: "Task", now: clock.now() });
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  for (const status of ["queued", "preparing", "running"] as const) created.value.transition(status, clock.now());
+  await repository.save(created.value, -1);
+  const executions = new InMemoryExecutionRepository();
+  await executions.save({
+    id: "repair-execution" as TaskExecutionId, taskId: "repair" as TaskId,
+    workspace: {
+      id: "repair-workspace" as WorkspaceId, taskId: "repair" as TaskId,
+      repositoryRoot: "/repo", worktreeRoot: "/trees", path: "/trees/repair",
+      branch: "multicodex/repair", baseRef: "base"
+    },
+    status: "cancelled", createdAt: clock.now(), updatedAt: clock.now(), version: 1
+  }, -1);
+
+  const result = await new AbandonTaskWorkflow(
+    new TaskLifecycleService(repository, clock), executions, clock
+  ).execute("repair" as TaskId);
+
+  assert.equal(result.ok, true);
+  const found = await repository.findById("repair" as TaskId);
+  assert.equal(found.ok && found.value?.snapshot().statusReason, "user-abandoned-recovered");
+});

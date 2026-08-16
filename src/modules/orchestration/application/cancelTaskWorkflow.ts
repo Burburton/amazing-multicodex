@@ -20,7 +20,15 @@ export class CancelTaskWorkflow {
     }
     const active = await this.executions.findActiveByTask(taskId);
     if (!active.ok) return active;
-    if (!active.value) return err(noActiveExecution(taskId));
+    if (!active.value) {
+      const latest = await this.executions.findLatestByTask(taskId);
+      if (!latest.ok) return latest;
+      if (latest.value?.status === "cancelled") {
+        const repaired = await this.tasks.transition(taskId, "cancelled", "user-requested-recovered");
+        return repaired.ok ? ok(latest.value) : repaired;
+      }
+      return err(noActiveExecution(taskId));
+    }
     if (active.value.agent) {
       try {
         await this.agents.interrupt(active.value.agent);

@@ -18,7 +18,15 @@ export class AbandonTaskWorkflow {
     }
     const execution = await this.executions.findActiveByTask(taskId);
     if (!execution.ok) return execution;
-    if (!execution.value) return err(activeExecutionNotFound(taskId));
+    if (!execution.value) {
+      const latest = await this.executions.findLatestByTask(taskId);
+      if (!latest.ok) return latest;
+      if (latest.value?.status === "cancelled") {
+        const repaired = await this.tasks.transition(taskId, "cancelled", "user-abandoned-recovered");
+        return repaired.ok ? ok(undefined) : repaired;
+      }
+      return err(activeExecutionNotFound(taskId));
+    }
     const cancelled: TaskExecutionRecord = {
       ...execution.value,
       status: "cancelled",
