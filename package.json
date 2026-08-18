@@ -42,6 +42,7 @@
     "onCommand:amazingMultiCodex.openProject",
     "onCommand:amazingMultiCodex.moveTask",
     "onCommand:amazingMultiCodex.configureTaskAgents",
+    "onCommand:amazingMultiCodex.retryAgentStage",
     "onCommand:amazingMultiCodex.createTask",
     "onCommand:amazingMultiCodex.editTask",
     "onCommand:amazingMultiCodex.refreshTasks",
@@ -214,6 +215,11 @@
         "command": "amazingMultiCodex.configureTaskAgents",
         "title": "MultiCodex: Configure Task Agents",
         "icon": "$(organization)"
+      },
+      {
+        "command": "amazingMultiCodex.retryAgentStage",
+        "title": "MultiCodex: Retry Failed Agent Stage",
+        "icon": "$(debug-restart)"
       },
       {
         "command": "amazingMultiCodex.createTask",

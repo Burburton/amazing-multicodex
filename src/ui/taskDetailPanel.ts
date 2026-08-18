@@ -5,12 +5,12 @@ import { TaskId, TaskProps } from "../modules/tasks/public";
 import { AgentPlanProps } from "../modules/agents/public";
 import { taskPriorityLabel, taskStatusLabel } from "./taskPresentation";
 
-export type TaskDetailAction = "edit" | "configureAgents" | "queue" | "start" | "resume" | "steer" | "cancel" | "validate" | "changes" | "integrate" | "recoverIntegration" | "release" | "delete";
+export type TaskDetailAction = "edit" | "configureAgents" | "queue" | "start" | "resume" | "retryStage" | "steer" | "cancel" | "validate" | "changes" | "integrate" | "recoverIntegration" | "release" | "delete";
 
 export interface TaskDetailViewModel extends TaskDetailProjection { readonly agentPlan?: AgentPlanProps }
 
 const allowedActions = new Set<TaskDetailAction>([
-  "edit", "configureAgents", "queue", "start", "resume", "steer", "cancel", "validate", "changes", "integrate", "recoverIntegration", "release", "delete"
+  "edit", "configureAgents", "queue", "start", "resume", "retryStage", "steer", "cancel", "validate", "changes", "integrate", "recoverIntegration", "release", "delete"
 ]);
 
 export class TaskDetailPanelManager implements vscode.Disposable {
@@ -108,7 +108,8 @@ function render(detail: TaskDetailViewModel): string {
   const activity = detail.activity.length
     ? detail.activity.map(item => `<article><header><span class="badge">${escapeHtml(item.kind)}</span><strong>${escapeHtml(item.summary)}</strong><time>${escapeHtml(item.occurredAt.toLocaleString())}</time></header>${item.detail ? `<pre>${escapeHtml(item.detail)}</pre>` : ""}</article>`).join("")
     : '<p class="muted">No activity recorded.</p>';
-  const actions = actionsFor(task.status, task.statusReason, !!detail.latestExecution)
+  const actions = actionsFor(task.status, task.statusReason, !!detail.latestExecution,
+    detail.latestExecution?.status === "failed" && detail.latestExecution.stage !== undefined)
     .map(action => `<button data-action="${action.id}"${action.id === "delete" ? ' class="danger"' : ""}>${escapeHtml(action.label)}</button>`).join("");
   const statusReason = task.statusReason
     ? `<aside role="status"><strong>Current status:</strong> ${escapeHtml(task.statusReason)}</aside>`
@@ -128,12 +129,15 @@ ${task.description ? `<p>${escapeHtml(task.description)}</p>` : ""}${statusReaso
 function actionsFor(
   status: TaskDetailProjection["task"]["status"],
   reason: string | undefined,
-  hasExecution: boolean
+  hasExecution: boolean,
+  canRetryStage = false
 ): readonly { id: TaskDetailAction; label: string }[] {
   const inspect = hasExecution ? [{ id: "changes" as const, label: "View changes" }] : [];
   switch (status) {
     case "draft": return [{ id: "edit", label: "Edit draft" }, { id: "configureAgents", label: "Configure agents" }, { id: "queue", label: "Queue task" }, { id: "delete", label: "Delete task" }];
-    case "failed": return [...inspect, { id: "queue", label: "Queue task" }, { id: "delete", label: "Delete task" }];
+    case "failed": return canRetryStage
+      ? [...inspect, { id: "retryStage", label: "Retry agent stage" }, { id: "delete", label: "Delete task" }]
+      : [...inspect, { id: "queue", label: "Queue task" }, { id: "delete", label: "Delete task" }];
     case "cancelled": return [
       ...inspect,
       { id: "queue", label: "Queue task" },

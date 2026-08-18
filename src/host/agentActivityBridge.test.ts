@@ -46,10 +46,11 @@ test("notifies the host after terminal activity is persisted", async () => {
   };
   const taskId = "task-1" as TaskId;
   const changed: TaskId[] = [];
+  const summaries: string[] = [];
   const bridge = new AgentActivityBridge(
     agents as never,
-    { findByAgent: async () => ({ ok: true, value: { taskId } }) } as never,
-    { record: async () => ({ ok: true, value: {} }) } as never,
+    { findByAgent: async () => ({ ok: true, value: { taskId, agent: { threadId: "thread", turnId: "turn" }, stage: { role: "reviewer", index: 1, total: 2 } } }) } as never,
+    { record: async (command: { summary: string }) => { summaries.push(command.summary); return { ok: true, value: {} }; } } as never,
     100,
     { error: () => undefined, activityRecorded: id => changed.push(id) }
   );
@@ -63,4 +64,5 @@ test("notifies the host after terminal activity is persisted", async () => {
   await new Promise(resolve => setImmediate(resolve));
 
   assert.deepEqual(changed, [taskId]);
+  assert.deepEqual(summaries, ["Reviewer turn completed"]);
 });

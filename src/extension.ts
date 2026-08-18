@@ -30,6 +30,7 @@ import {
   ReleaseTaskWorkspaceWorkflow,
   ReconcileExecutionsWorkflow,
   ResumeTaskWorkflow,
+  RetryAgentStageWorkflow,
   SchedulerPolicy,
   StartTaskWorkflow,
   SteerTaskWorkflow,
@@ -118,6 +119,7 @@ export function activate(context: vscode.ExtensionContext): void {
     queue: "amazingMultiCodex.queueTask",
     start: "amazingMultiCodex.startTask",
     resume: "amazingMultiCodex.resumeTask",
+    retryStage: "amazingMultiCodex.retryAgentStage",
     steer: "amazingMultiCodex.steerTask",
     cancel: "amazingMultiCodex.cancelTask",
     validate: "amazingMultiCodex.validateTask",
@@ -653,6 +655,26 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showErrorMessage(`Could not resume MultiCodex task: ${message}`);
       }
     }),
+    vscode.commands.registerCommand("amazingMultiCodex.retryAgentStage", async (task?: TaskProps) => {
+      task = await selectTask(task, candidate => candidate.status === "failed", "Retry a failed agent stage");
+      if (!task) return;
+      const project = await resolveTaskProject(task);
+      if (!project) return;
+      const settings = readSettings();
+      if (!settings.ok) { void vscode.window.showErrorMessage(settings.error.message); return; }
+      try {
+        const agent = await codex.start({ cwd: project.repositoryRoot, executable: settings.value.codexExecutable, requestTimeoutMs: settings.value.requestTimeoutMs });
+        bindAgent(agent, settings.value.maxActivityCharacters);
+        const retried = await new RetryAgentStageWorkflow(lifecycle, agent, executions, agentPlanRepository, clock).execute(task.id);
+        if (!retried.ok) { void vscode.window.showErrorMessage(retried.error.message); return; }
+        connectedTasks.add(task.id);
+        refreshViews();
+        await taskDetails.refresh(task.id);
+        void vscode.window.showInformationMessage(`Retried ${retried.value.stage?.role ?? "agent"} stage for: ${task.title}`);
+      } catch (cause) {
+        void vscode.window.showErrorMessage(`Could not retry agent stage: ${cause instanceof Error ? cause.message : "Unknown error."}`);
+      }
+    }),
     vscode.commands.registerCommand("amazingMultiCodex.showActivity", async (task?: TaskProps) => {
       task = await selectTask(task, () => true, "Show task activity");
       if (!task) return;
@@ -1162,7 +1184,7 @@ export function activate(context: vscode.ExtensionContext): void {
     activityBridge = new AgentActivityBridge(agent, executions, activity, maxActivityCharacters, {
       error: (message, error) => console.error(message, error),
       activityRecorded: taskId => { void taskDetails.refresh(taskId); }
-    });
+    }, 128, agentPlanRepository);
     activityBridge.start();
     approvalBridge?.stop();
     approvalBridge = createApprovalBridge(agent);

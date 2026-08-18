@@ -110,7 +110,9 @@ Draft task details expose `Configure agents` for defining the planned role
 pipeline. Each configured stage runs as an independent Codex session in the
 same isolated worktree. The next role receives a bounded textual handoff and
 must inspect the accumulated workspace before continuing. Validation starts
-only after the final role completes.
+only after the final role completes. Activity entries identify the responsible
+role, and a failed stage can be retried from task details without creating a
+second worktree or restarting the whole pipeline.
 
 The normal task flow is:
 

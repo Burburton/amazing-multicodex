@@ -30,7 +30,10 @@ Per-task agent plans are persisted as ordered, bounded role pipelines and shown
 in task details. Each stage runs in an independent Codex session against the
 same isolated worktree. Execution records retain the current stage and bounded
 prior agent identities, while the next role receives a bounded textual handoff.
-Only the final successful stage advances the task to validation.
+Only the final successful stage advances the task to validation. Agent activity
+is role-labelled, and a failed stage can be restarted in its existing worktree
+through a compensated workflow that returns partial failures to a terminal
+task state.
 
 ## 1. Purpose
 

@@ -1,4 +1,4 @@
-import { AgentRuntimeEvent, AgentRuntimePort } from "../modules/agents/public";
+import { AgentPlanRepository, AgentRole, AgentRuntimeEvent, AgentRuntimePort } from "../modules/agents/public";
 import { ActivityService } from "../modules/activity/public";
 import { ExecutionRepository, TaskExecutionRecord } from "../modules/orchestration/public";
 
@@ -17,7 +17,8 @@ export class AgentActivityBridge {
     private readonly activity: ActivityService,
     private readonly maxMessageCharacters = 32_000,
     private readonly diagnostics: ActivityBridgeDiagnostics = { error: () => undefined },
-    private readonly maxBufferedTurns = 128
+    private readonly maxBufferedTurns = 128,
+    private readonly plans?: AgentPlanRepository
   ) {}
 
   start(): void {
@@ -49,11 +50,13 @@ export class AgentActivityBridge {
       this.diagnostics.error("Could not associate Codex activity with a task.", execution.ok ? undefined : execution.error);
       return;
     }
+    const role = await this.roleFor(execution.value, event.threadId, event.turnId);
+    const prefix = role ? `${roleLabel(role)} ` : "Codex ";
     if (message) {
       const recorded = await this.activity.record({
         taskId: execution.value.taskId,
         kind: "agentMessage",
-        summary: "Codex response",
+        summary: `${prefix}response`,
         detail: message
       });
       if (!recorded.ok) this.diagnostics.error("Could not persist Codex response activity.", recorded.error);
@@ -61,9 +64,19 @@ export class AgentActivityBridge {
     const terminal = await this.activity.record({
       taskId: execution.value.taskId,
       kind: event.status === "completed" ? "lifecycle" : "error",
-      summary: `Codex turn ${event.status}`
+      summary: `${prefix}turn ${event.status}`
     });
     if (!terminal.ok) this.diagnostics.error("Could not persist Codex terminal activity.", terminal.error);
     else this.diagnostics.activityRecorded?.(execution.value.taskId);
   }
+
+  private async roleFor(execution: TaskExecutionRecord, threadId: string, turnId: string): Promise<AgentRole | undefined> {
+    if (execution.agent?.threadId === threadId && execution.agent.turnId === turnId) return execution.stage?.role;
+    const index = execution.previousAgents?.findIndex(agent => agent.threadId === threadId && agent.turnId === turnId) ?? -1;
+    if (index < 0 || !this.plans) return undefined;
+    const plan = await this.plans.findByTask(execution.taskId);
+    return plan.ok ? plan.value?.snapshot().stages[index]?.role : undefined;
+  }
 }
+
+function roleLabel(role: AgentRole): string { return role[0].toUpperCase() + role.slice(1); }
