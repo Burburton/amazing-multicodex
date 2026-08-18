@@ -15,7 +15,8 @@ The extension currently provides the core multi-task execution loop:
 - a persistent project registry with one repository root and base ref per project;
 - project edit, open, and safe removal actions plus draft-task reassignment;
 - a `MultiCodex Projects` dashboard with task, active-work, attention, and
-  completion metrics plus clickable task drill-down;
+  completion metrics, intent-based task groups, search/filter controls, recent
+  update visibility, and clickable task drill-down;
 - a `MultiCodex Tasks` Explorer view with create, start, resume, cancel, and
   activity commands;
 - command-palette task selection filtered to the states accepted by each action;

@@ -16,7 +16,7 @@ operations. This is an intentional transitional implementation, not a change
 to the SQLite decision in section 10. Lifecycle-driven dispatch, restart
 reconciliation, safe workspace cleanup, and a reusable task-detail webview are
 implemented. The current presentation includes a hierarchical Explorer tree
-(`Project -> Tasks`), click-through project dashboards,
+(`Project -> Tasks`), searchable project dashboards grouped by operator intent,
 state-filtered Command Palette actions, editable drafts, task follow-ups, an
 actionable readiness report, and a live-refreshing detail/activity panel.
 
