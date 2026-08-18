@@ -23,10 +23,18 @@ import { ResumeTaskWorkflow } from "./resumeTaskWorkflow";
 class FixedClock implements Clock { now(): Date { return new Date("2026-08-15T12:00:00Z"); } }
 class ResumingAgent implements AgentRuntimePort {
   resumed?: ResumeExecutionInput;
+  started?: StartExecutionInput;
   interrupted?: AgentExecutionRef;
   failInterrupt = false;
   initialize(): Promise<void> { return Promise.resolve(); }
-  start(_input: StartExecutionInput): Promise<AgentExecutionRef> { throw new Error("unused"); }
+  async start(input: StartExecutionInput): Promise<AgentExecutionRef> {
+    this.started = input;
+    return {
+      executionId: "agent-recovered" as ExecutionId,
+      threadId: "thread-recovered" as AgentThreadId,
+      turnId: "turn-recovered" as AgentTurnId
+    };
+  }
   async resume(input: ResumeExecutionInput): Promise<AgentExecutionRef> {
     this.resumed = input;
     return {
@@ -106,6 +114,35 @@ test("interrupts a resumed turn when its new binding cannot be persisted", async
 
   assert.equal(result.ok, false);
   assert.equal(agent.interrupted?.turnId, "turn-2");
+});
+
+test("starts the pending role from a persisted handoff instead of resuming the completed turn", async () => {
+  const { clock, tasks, record } = await runningState("task-pending-handoff");
+  const executions = new InMemoryExecutionRepository();
+  await executions.save({
+    ...record,
+    stage: { index: 0, total: 2, role: "implementer" },
+    pendingStage: {
+      index: 1, role: "reviewer", objective: "Review the implementation",
+      handoff: "Implementation complete and tests pass.", reason: "advance"
+    }
+  }, -1);
+  const agent = new ResumingAgent();
+
+  const result = await new ResumeTaskWorkflow(
+    new TaskLifecycleService(tasks, clock), agent, executions, clock
+  ).execute({ taskId: record.taskId });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(agent.resumed, undefined);
+  assert.equal(agent.started?.cwd, record.workspace.path);
+  assert.match(agent.started?.prompt ?? "", /Implementation complete and tests pass/);
+  assert.match(agent.started?.prompt ?? "", /VERDICT: APPROVED/);
+  assert.equal(result.value.stage?.role, "reviewer");
+  assert.equal(result.value.pendingStage, undefined);
+  assert.equal(result.value.previousAgents?.[0]?.turnId, "turn-1");
+  assert.equal(result.value.agent?.turnId, "turn-recovered");
 });
 
 test("blocks retry when an unpersisted resumed turn cannot be interrupted", async () => {

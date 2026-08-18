@@ -26,11 +26,13 @@ class FixedClock implements Clock { now(): Date { return new Date("2026-08-15T12
 class FakeAgent implements AgentRuntimePort {
   listener?: AgentEventListener;
   starts: StartExecutionInput[] = [];
+  startGate?: Promise<void>;
   initialize(): Promise<void> { return Promise.resolve(); }
-  start(input: StartExecutionInput): Promise<AgentExecutionRef> {
+  async start(input: StartExecutionInput): Promise<AgentExecutionRef> {
     this.starts.push(input);
+    await this.startGate;
     const index = this.starts.length + 1;
-    return Promise.resolve({ executionId: `agent-${index}` as ExecutionId, threadId: `thread-${index}` as AgentThreadId, turnId: `turn-${index}` as AgentTurnId });
+    return { executionId: `agent-${index}` as ExecutionId, threadId: `thread-${index}` as AgentThreadId, turnId: `turn-${index}` as AgentTurnId };
   }
   resume(_input: ResumeExecutionInput): Promise<AgentExecutionRef> { throw new Error("unused"); }
   steer(): Promise<void> { return Promise.resolve(); }
@@ -168,4 +170,46 @@ test("fails a pipeline after three requested-change review cycles", async () => 
   assert.equal(failed.ok && failed.value?.snapshot().status, "failed");
   assert.equal(failed.ok && failed.value?.snapshot().statusReason, "agent-plan.review-limit");
   assert.equal(agents.starts.length, 0);
+});
+
+test("persists the next-stage handoff before starting its agent session", async () => {
+  const clock = new FixedClock();
+  const tasks = new InMemoryTaskRepository();
+  const task = Task.create({ id: "checkpoint" as TaskId, title: "Checkpoint", now: clock.now() });
+  assert.equal(task.ok, true);
+  if (!task.ok) return;
+  for (const status of ["queued", "preparing", "running"] as const) task.value.transition(status, clock.now());
+  await tasks.save(task.value, -1);
+  const executions = new InMemoryExecutionRepository();
+  await executions.save({
+    id: "checkpoint-execution" as TaskExecutionId, taskId: "checkpoint" as TaskId,
+    workspace: { id: "checkpoint-workspace" as WorkspaceId, taskId: "checkpoint" as TaskId, repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/checkpoint", branch: "branch", baseRef: "main" },
+    agent: { executionId: "checkpoint-agent" as ExecutionId, threadId: "checkpoint-thread" as AgentThreadId, turnId: "checkpoint-turn" as AgentTurnId },
+    stage: { index: 0, total: 2, role: "implementer" }, status: "running", createdAt: clock.now(), updatedAt: clock.now(), version: 0
+  }, -1);
+  const plan = AgentPlan.create({ taskId: "checkpoint" as TaskId, stages: agentPlanTemplate("reviewed"), updatedAt: clock.now() });
+  assert.equal(plan.ok, true);
+  if (!plan.ok) return;
+  let releaseStart!: () => void;
+  const agents = new FakeAgent();
+  agents.startGate = new Promise(resolve => { releaseStart = resolve; });
+  new AgentEventCoordinator(agents, executions, new TaskLifecycleService(tasks, clock), clock, undefined, new Plans(plan.value)).start();
+  agents.listener?.({ type: "agentMessageDelta", threadId: "checkpoint-thread" as AgentThreadId, turnId: "checkpoint-turn" as AgentTurnId, delta: "Ready for review." });
+  agents.listener?.({ type: "turnCompleted", threadId: "checkpoint-thread" as AgentThreadId, turnId: "checkpoint-turn" as AgentTurnId, status: "completed" });
+  agents.listener?.({ type: "turnCompleted", threadId: "checkpoint-thread" as AgentThreadId, turnId: "checkpoint-turn" as AgentTurnId, status: "completed" });
+  await new Promise(resolve => setImmediate(resolve));
+
+  const checkpoint = await executions.findActiveByTask("checkpoint" as TaskId);
+  assert.equal(checkpoint.ok && checkpoint.value?.pendingStage?.role, "reviewer");
+  assert.equal(checkpoint.ok && checkpoint.value?.pendingStage?.handoff, "Ready for review.");
+  assert.equal(checkpoint.ok && checkpoint.value?.agent?.turnId, "checkpoint-turn");
+  assert.equal(agents.starts.length, 1);
+  const running = await tasks.findById("checkpoint" as TaskId);
+  assert.equal(running.ok && running.value?.snapshot().status, "running");
+
+  releaseStart();
+  await new Promise(resolve => setImmediate(resolve));
+  const advanced = await executions.findActiveByTask("checkpoint" as TaskId);
+  assert.equal(advanced.ok && advanced.value?.pendingStage, undefined);
+  assert.equal(advanced.ok && advanced.value?.stage?.role, "reviewer");
 });

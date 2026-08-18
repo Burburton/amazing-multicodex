@@ -1,7 +1,8 @@
 import { Clock } from "../../../shared/core/clock";
 import { AgentPlanRepository, AgentRuntimeEvent, AgentRuntimePort } from "../../agents/public";
 import { TaskLifecycleService } from "../../tasks/public";
-import { ExecutionRepository, TaskExecutionRecord } from "../ports/executionRepository";
+import { ExecutionRepository, PendingAgentStage, TaskExecutionRecord } from "../ports/executionRepository";
+import { pendingStagePrompt } from "./agentStagePrompt";
 
 export interface CoordinatorDiagnostics {
   readonly error: (message: string, cause?: unknown) => void;
@@ -49,6 +50,7 @@ export class AgentEventCoordinator {
     }
     if (!found.value || found.value.status !== "running") return;
     if (found.value.agent?.threadId !== event.threadId || found.value.agent.turnId !== event.turnId) return;
+    if (found.value.pendingStage) return;
     const success = event.status === "completed";
     const handoff = this.handoffs.get(eventKey);
     this.handoffs.delete(eventKey);
@@ -61,52 +63,22 @@ export class AgentEventCoordinator {
       if (implementerIndex < 0) { await this.failStage(found.value, "agent-plan.implementer-missing"); return; }
       if (cycles >= MAX_REVIEW_CYCLES) { await this.failStage(found.value, "agent-plan.review-limit"); return; }
       const implementer = stages![implementerIndex];
-      try {
-        const agent = await this.agents.start({
-          cwd: found.value.workspace.path, model: found.value.model,
-          prompt: ["You are the implementer stage revising work after review.", `Stage objective: ${implementer.objective}`,
-            "Inspect the shared worktree and address every review finding.", `Reviewer feedback:\n${handoff ?? "Changes were requested without textual feedback."}`,
-            "Finish with a concise handoff for the reviewer."].join("\n\n")
-        });
-        const revised: TaskExecutionRecord = {
-          ...found.value, agent,
-          previousAgents: [...(found.value.previousAgents ?? []), found.value.agent].slice(-8),
-          stage: { index: implementerIndex, total: found.value.stage.total, role: "implementer" },
-          reviewCycles: cycles + 1, updatedAt: this.clock.now(), version: found.value.version + 1
-        };
-        const saved = await this.executions.save(revised, found.value.version);
-        if (!saved.ok) { await this.agents.interrupt(agent); await this.failStage(found.value, "agent-plan.review-return-failed", saved.error); return; }
-        this.diagnostics.taskChanged?.(found.value.taskId, true);
-        return;
-      } catch (cause) { await this.failStage(found.value, "agent-plan.review-return-start-failed", cause); return; }
+      await this.startPendingStage(found.value, {
+        index: implementerIndex, role: "implementer", objective: implementer.objective,
+        handoff, reason: "reviewReturn"
+      }, cycles + 1);
+      return;
     }
     if (success && this.plans && found.value.stage && found.value.stage.index + 1 < found.value.stage.total) {
       const plan = await this.plans.findByTask(found.value.taskId);
       if (!plan.ok) { await this.failStage(found.value, "agent-plan.load-failed", plan.error); return; }
       const next = plan.value?.snapshot().stages[found.value.stage.index + 1];
       if (!next) { await this.failStage(found.value, "agent-plan.stage-missing"); return; }
-      try {
-        const agent = await this.agents.start({
-          cwd: found.value.workspace.path,
-          model: found.value.model,
-          prompt: [`You are the ${next.role} stage in a multi-agent task pipeline.`, `Stage objective: ${next.objective}`,
-            "Inspect the shared worktree and continue from the previous stage.", handoff ? `Previous stage handoff:\n${handoff}` : "No textual handoff was produced; rely on the worktree and task context.",
-            next.role === "reviewer" ? "End your response with exactly one verdict line: VERDICT: APPROVED or VERDICT: CHANGES_REQUESTED. Explain required changes before the verdict." : ""].filter(Boolean).join("\n\n")
-        });
-        const advanced: TaskExecutionRecord = {
-          ...found.value, agent,
-          previousAgents: [...(found.value.previousAgents ?? []), found.value.agent].slice(-8),
-          stage: { index: found.value.stage.index + 1, total: found.value.stage.total, role: next.role },
-          updatedAt: this.clock.now(), version: found.value.version + 1
-        };
-        const saved = await this.executions.save(advanced, found.value.version);
-        if (!saved.ok) { await this.agents.interrupt(agent); await this.failStage(found.value, "agent-plan.advance-failed", saved.error); return; }
-        this.diagnostics.taskChanged?.(found.value.taskId, true);
-        return;
-      } catch (cause) {
-        await this.failStage(found.value, "agent-plan.start-failed", cause);
-        return;
-      }
+      await this.startPendingStage(found.value, {
+        index: found.value.stage.index + 1, role: next.role, objective: next.objective,
+        handoff, reason: "advance"
+      }, found.value.reviewCycles);
+      return;
     }
     const updated: TaskExecutionRecord = {
       ...found.value,
@@ -131,9 +103,65 @@ export class AgentEventCoordinator {
     }
   }
 
+  private async startPendingStage(
+    execution: TaskExecutionRecord,
+    pendingStage: PendingAgentStage,
+    reviewCycles: number | undefined
+  ): Promise<void> {
+    const checkpoint: TaskExecutionRecord = {
+      ...execution, pendingStage, updatedAt: this.clock.now(), version: execution.version + 1
+    };
+    const checkpointed = await this.executions.save(checkpoint, execution.version);
+    if (!checkpointed.ok) {
+      if (checkpointed.error.code === "execution.version-conflict") {
+        this.diagnostics.error("Another handler already advanced this agent stage.", checkpointed.error);
+        return;
+      }
+      await this.failStage(execution, "agent-plan.checkpoint-failed", checkpointed.error);
+      return;
+    }
+    let agent;
+    try {
+      agent = await this.agents.start({
+        cwd: checkpoint.workspace.path,
+        model: checkpoint.model,
+        prompt: pendingStagePrompt(pendingStage)
+      });
+    } catch (cause) {
+      await this.failStage(checkpoint, pendingStage.reason === "reviewReturn"
+        ? "agent-plan.review-return-start-failed" : "agent-plan.start-failed", cause);
+      return;
+    }
+    const { pendingStage: _completedCheckpoint, ...checkpointBase } = checkpoint;
+    const advanced: TaskExecutionRecord = {
+      ...checkpointBase,
+      agent,
+      previousAgents: [...(checkpoint.previousAgents ?? []), ...(checkpoint.agent ? [checkpoint.agent] : [])].slice(-8),
+      stage: { index: pendingStage.index, total: checkpoint.stage?.total ?? pendingStage.index + 1, role: pendingStage.role },
+      reviewCycles,
+      updatedAt: this.clock.now(),
+      version: checkpoint.version + 1
+    };
+    const saved = await this.executions.save(advanced, checkpoint.version);
+    if (!saved.ok) {
+      try { await this.agents.interrupt(agent); } catch (cause) {
+        this.diagnostics.error("Could not interrupt an unpersisted agent stage.", cause);
+      }
+      if (saved.error.code === "execution.version-conflict") {
+        this.diagnostics.error("Another handler already bound the pending agent stage.", saved.error);
+        return;
+      }
+      await this.failStage(checkpoint, pendingStage.reason === "reviewReturn"
+        ? "agent-plan.review-return-failed" : "agent-plan.advance-failed", saved.error);
+      return;
+    }
+    this.diagnostics.taskChanged?.(execution.taskId, true);
+  }
+
   private async failStage(execution: TaskExecutionRecord, reason: string, cause?: unknown): Promise<void> {
+    const { pendingStage: _pendingStage, ...executionBase } = execution;
     const saved = await this.executions.save({
-      ...execution, status: "failed", updatedAt: this.clock.now(), version: execution.version + 1
+      ...executionBase, status: "failed", updatedAt: this.clock.now(), version: execution.version + 1
     }, execution.version);
     if (!saved.ok) this.diagnostics.error("Could not persist failed agent stage.", saved.error);
     const transitioned = await this.tasks.transition(execution.taskId, "failed", reason);

@@ -40,6 +40,13 @@ verdict routes the same execution back to its Implementer stage with bounded
 feedback, after which review repeats. The persisted review-cycle counter is
 capped at three; exceeding the cap fails the execution with a diagnostic reason.
 
+Agent stage transitions are two-phase. The execution repository first stores a
+bounded pending-stage checkpoint containing the target role, objective, handoff,
+and transition reason. Only then may the runtime start the target session and
+replace the current agent binding. Recovery replays a remaining checkpoint into
+a new session in the same worktree, so a host exit cannot silently resume the
+completed source stage or lose reviewer feedback.
+
 ## 1. Purpose
 
 Amazing MultiCodex is a VS Code control plane for coordinating multiple Codex
@@ -535,6 +542,8 @@ worktrees or mark active tasks failed merely because VS Code closed.
 On recovery:
 
 - a known active turn is resumed or observed;
+- a persisted pending-stage checkpoint starts its target role with the saved
+  handoff before any completed source turn is considered resumable;
 - an existing thread without an active turn becomes resumable;
 - a missing worktree blocks its task with a repair action;
 - a runtime outage sets runtime health degraded, not every task failed;

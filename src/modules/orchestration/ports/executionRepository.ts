@@ -7,6 +7,14 @@ import { WorkspaceRef } from "../../workspaces/public";
 export type TaskExecutionId = Brand<string, "TaskExecutionId">;
 export type TaskExecutionStatus = "prepared" | "running" | "completed" | "failed" | "cancelled";
 
+export interface PendingAgentStage {
+  readonly index: number;
+  readonly role: AgentRole;
+  readonly objective: string;
+  readonly handoff?: string;
+  readonly reason: "advance" | "reviewReturn";
+}
+
 export interface TaskExecutionRecord {
   readonly id: TaskExecutionId;
   readonly taskId: TaskId;
@@ -14,6 +22,7 @@ export interface TaskExecutionRecord {
   readonly agent?: AgentExecutionRef;
   readonly previousAgents?: readonly AgentExecutionRef[];
   readonly stage?: { readonly index: number; readonly total: number; readonly role: AgentRole };
+  readonly pendingStage?: PendingAgentStage;
   readonly model?: string;
   readonly reviewCycles?: number;
   readonly status: TaskExecutionStatus;

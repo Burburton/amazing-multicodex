@@ -17,6 +17,7 @@ interface StoredExecution {
   readonly agent?: AgentExecutionRef;
   readonly previousAgents?: readonly AgentExecutionRef[];
   readonly stage?: TaskExecutionRecord["stage"];
+  readonly pendingStage?: TaskExecutionRecord["pendingStage"];
   readonly model?: string;
   readonly reviewCycles?: number;
   readonly status: TaskExecutionRecord["status"];
@@ -155,6 +156,7 @@ function isStoredExecution(value: unknown): value is StoredExecution {
   const agent = execution.agent as Record<string, unknown> | undefined;
   const previousAgents = execution.previousAgents as Array<Record<string, unknown>> | undefined;
   const stage = execution.stage as Record<string, unknown> | undefined;
+  const pendingStage = execution.pendingStage as Record<string, unknown> | undefined;
   return boundedString(execution.id, 1_000)
     && boundedString(execution.taskId, 1_000)
     && !!workspace && boundedString(workspace.id, 1_000)
@@ -170,6 +172,12 @@ function isStoredExecution(value: unknown): value is StoredExecution {
     && (stage === undefined || (Number.isInteger(stage.index) && Number(stage.index) >= 0 && Number.isInteger(stage.total)
       && Number(stage.total) >= 1 && Number(stage.total) <= 8 && Number(stage.index) < Number(stage.total)
       && ["planner", "implementer", "reviewer", "tester"].includes(String(stage.role))))
+    && (pendingStage === undefined || (!!stage && Number.isInteger(pendingStage.index)
+      && Number(pendingStage.index) >= 0 && Number(pendingStage.index) < Number(stage.total)
+      && ["planner", "implementer", "reviewer", "tester"].includes(String(pendingStage.role))
+      && boundedString(pendingStage.objective, 2_000)
+      && (pendingStage.handoff === undefined || (typeof pendingStage.handoff === "string" && pendingStage.handoff.length <= 20_000))
+      && ["advance", "reviewReturn"].includes(String(pendingStage.reason))))
     && (execution.model === undefined || (typeof execution.model === "string" && execution.model.length > 0 && execution.model.length <= 500))
     && (execution.reviewCycles === undefined || (Number.isInteger(execution.reviewCycles) && Number(execution.reviewCycles) >= 0 && Number(execution.reviewCycles) <= 3))
     && ["prepared", "running", "completed", "failed", "cancelled"].includes(String(execution.status))

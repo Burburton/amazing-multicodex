@@ -3,6 +3,7 @@ import { AppError, Result, err, ok } from "../../../shared/core/result";
 import { AgentRuntimePort } from "../../agents/public";
 import { TaskId, TaskLifecycleService } from "../../tasks/public";
 import { ExecutionRepository, TaskExecutionRecord } from "../ports/executionRepository";
+import { pendingStagePrompt } from "./agentStagePrompt";
 
 export interface ResumeTaskWorkflowCommand {
   readonly taskId: TaskId;
@@ -23,21 +24,40 @@ export class ResumeTaskWorkflow {
     if (task.value.status !== "running") return err(notRunning(command.taskId, task.value.status));
     const active = await this.executions.findActiveByTask(command.taskId);
     if (!active.ok) return active;
-    if (!active.value?.agent) return err(noResumableExecution(command.taskId));
+    if (!active.value) return err(noResumableExecution(command.taskId));
+    const execution = active.value;
+    if (!execution.pendingStage && !execution.agent) return err(noResumableExecution(command.taskId));
     try {
-      const agent = await this.agents.resume({
-        threadId: active.value.agent.threadId,
-        prompt: command.prompt?.trim() || "Continue the task from the existing context and finish the requested work.",
-        cwd: active.value.workspace.path
-      });
+      const pendingStage = execution.pendingStage;
+      const agent = pendingStage
+        ? await this.agents.start({
+            prompt: [pendingStagePrompt(pendingStage), command.prompt?.trim()].filter(Boolean).join("\n\nAdditional recovery instruction:\n"),
+            cwd: execution.workspace.path,
+            model: execution.model
+          })
+        : await this.agents.resume({
+            threadId: execution.agent!.threadId,
+            prompt: command.prompt?.trim() || "Continue the task from the existing context and finish the requested work.",
+            cwd: execution.workspace.path
+          });
+      const { pendingStage: _recoveredCheckpoint, ...executionBase } = execution;
       const updated: TaskExecutionRecord = {
-        ...active.value,
+        ...executionBase,
         agent,
+        previousAgents: pendingStage
+          ? [...(execution.previousAgents ?? []), ...(execution.agent ? [execution.agent] : [])].slice(-8)
+          : execution.previousAgents,
+        stage: pendingStage
+          ? { index: pendingStage.index, total: execution.stage?.total ?? pendingStage.index + 1, role: pendingStage.role }
+          : execution.stage,
+        reviewCycles: pendingStage?.reason === "reviewReturn"
+          ? (execution.reviewCycles ?? 0) + 1
+          : execution.reviewCycles,
         status: "running",
         updatedAt: this.clock.now(),
-        version: active.value.version + 1
+        version: execution.version + 1
       };
-      const saved = await this.executions.save(updated, active.value.version);
+      const saved = await this.executions.save(updated, execution.version);
       if (saved.ok) return ok(updated);
       try {
         await this.agents.interrupt(agent);

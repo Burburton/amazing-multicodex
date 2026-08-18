@@ -27,5 +27,6 @@ export type {
   ExecutionDeletionRepository,
   TaskExecutionId,
   TaskExecutionRecord,
-  TaskExecutionStatus
+  TaskExecutionStatus,
+  PendingAgentStage
 } from "./ports/executionRepository";

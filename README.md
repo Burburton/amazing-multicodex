@@ -119,6 +119,12 @@ returns the task to the Implementer with the review handoff, then runs Reviewer
 again. `VERDICT: APPROVED` continues to the next stage. Review feedback loops
 are persisted and capped at three cycles to prevent unbounded execution.
 
+Stage changes use a durable handoff checkpoint: MultiCodex persists the target
+role, objective, and bounded handoff before starting its Codex session. If VS
+Code exits in that small transition window, task details show the pending role
+and `Reconnect / Resume` starts that exact stage instead of resuming the already
+completed prior turn.
+
 The normal task flow is:
 
 1. Create a task, choose its project, and, if needed, edit the draft with a
@@ -154,7 +160,8 @@ a completed task; integration intentionally requires a clean target repository.
   and unresolved base ref are reported separately.
 - If Codex exits or VS Code reloads while a task is running, open that task and
   choose `Reconnect / Resume`. The existing worktree and Codex thread identity
-  are retained in workspace storage.
+  are retained in workspace storage. A pending role handoff is recovered into
+  a new role session automatically.
 - If integration says the target is dirty, commit or stash changes in the main
   repository and retry. MultiCodex never discards unrelated target changes.
 - Cancelling validation stops the validation process tree and leaves the task
