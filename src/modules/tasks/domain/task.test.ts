@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Task, TaskId } from "./task";
+import { ProjectId } from "../../projects/public";
 
 const now = new Date("2026-08-15T12:00:00.000Z");
 
@@ -98,4 +99,16 @@ test("allows an integration-blocked task to return to review", () => {
     assert.equal(result.value.transition(status, now).ok, true);
   }
   assert.equal(result.value.transition("readyForReview", now, "integration-retry").ok, true);
+});
+
+test("moves only a draft task to another project", () => {
+  const result = Task.create({ id: "task-1" as TaskId, projectId: "first" as ProjectId, title: "Move", now });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.assignProject("second" as ProjectId, new Date(1)).ok, true);
+  assert.equal(result.value.snapshot().projectId, "second");
+  assert.equal(result.value.transition("queued", now).ok, true);
+  const locked = result.value.assignProject("first" as ProjectId, new Date(2));
+  assert.equal(locked.ok, false);
+  if (!locked.ok) assert.equal(locked.error.code, "task.project-locked");
 });

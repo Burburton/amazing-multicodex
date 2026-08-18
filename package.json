@@ -37,6 +37,10 @@
     "onCommand:amazingMultiCodex.addProject",
     "onCommand:amazingMultiCodex.refreshProjects",
     "onCommand:amazingMultiCodex.showProjectDetails",
+    "onCommand:amazingMultiCodex.editProject",
+    "onCommand:amazingMultiCodex.removeProject",
+    "onCommand:amazingMultiCodex.openProject",
+    "onCommand:amazingMultiCodex.moveTask",
     "onCommand:amazingMultiCodex.createTask",
     "onCommand:amazingMultiCodex.editTask",
     "onCommand:amazingMultiCodex.refreshTasks",
@@ -186,6 +190,26 @@
         "icon": "$(dashboard)"
       },
       {
+        "command": "amazingMultiCodex.editProject",
+        "title": "MultiCodex: Edit Project",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "amazingMultiCodex.removeProject",
+        "title": "MultiCodex: Remove Project",
+        "icon": "$(remove)"
+      },
+      {
+        "command": "amazingMultiCodex.openProject",
+        "title": "MultiCodex: Open Project Repository",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "amazingMultiCodex.moveTask",
+        "title": "MultiCodex: Move Task to Project",
+        "icon": "$(arrow-swap)"
+      },
+      {
         "command": "amazingMultiCodex.createTask",
         "title": "MultiCodex: Create Task"
       },
@@ -319,6 +343,31 @@
       ],
       "view/item/context": [
         {
+          "command": "amazingMultiCodex.createTask",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexProject",
+          "group": "inline"
+        },
+        {
+          "command": "amazingMultiCodex.showProjectDetails",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexProject",
+          "group": "navigation@1"
+        },
+        {
+          "command": "amazingMultiCodex.editProject",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexProject",
+          "group": "navigation@2"
+        },
+        {
+          "command": "amazingMultiCodex.openProject",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexProject",
+          "group": "navigation@3"
+        },
+        {
+          "command": "amazingMultiCodex.removeProject",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexProject",
+          "group": "navigation@99"
+        },
+        {
           "command": "amazingMultiCodex.editTask",
           "when": "view == amazingMultiCodex.projects && viewItem == multicodexTask.draft",
           "group": "inline"
@@ -387,6 +436,11 @@
           "command": "amazingMultiCodex.removeDependency",
           "when": "view == amazingMultiCodex.projects && viewItem == multicodexTask.draft",
           "group": "navigation"
+        },
+        {
+          "command": "amazingMultiCodex.moveTask",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexTask.draft",
+          "group": "navigation@4"
         },
         {
           "command": "amazingMultiCodex.releaseWorkspace",

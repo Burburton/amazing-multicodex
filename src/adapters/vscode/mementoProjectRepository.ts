@@ -45,6 +45,16 @@ export class MementoProjectRepository implements ProjectRepository {
       catch (cause) { return err(persistenceError(cause)); }
     });
   }
+  async delete(id: ProjectId): Promise<Result<void>> {
+    return this.writes.run(async () => {
+      const records = this.records();
+      if (!records.ok) return records;
+      const remaining = records.value.filter(item => item.id !== id);
+      if (remaining.length === records.value.length) return ok(undefined);
+      try { await this.state.update(STORAGE_KEY, remaining); return ok(undefined); }
+      catch (cause) { return err(persistenceError(cause)); }
+    });
+  }
   private records(): Result<StoredProject[]> {
     try {
       const stored = this.state.get<unknown>(STORAGE_KEY, []);

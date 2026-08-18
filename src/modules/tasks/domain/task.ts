@@ -115,6 +115,14 @@ export class Task {
     return ok(undefined);
   }
 
+  assignProject(projectId: ProjectId, now: Date): Result<void> {
+    if (this.props.status !== "draft") {
+      return err(taskError("task.project-locked", "Only draft tasks can be moved to another project."));
+    }
+    this.props = { ...this.props, projectId, updatedAt: now, version: this.props.version + 1 };
+    return ok(undefined);
+  }
+
   transition(next: TaskStatus, now: Date, reason?: string): Result<void> {
     if (!transitions[this.props.status].includes(next)) {
       return err(taskError(

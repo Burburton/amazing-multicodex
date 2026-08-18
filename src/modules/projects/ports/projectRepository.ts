@@ -6,4 +6,5 @@ export interface ProjectRepository {
   findById(id: ProjectId): Promise<Result<Project | undefined>>;
   findByRepositoryRoot(root: string): Promise<Result<Project | undefined>>;
   save(project: Project): Promise<Result<void>>;
+  delete(id: ProjectId): Promise<Result<void>>;
 }

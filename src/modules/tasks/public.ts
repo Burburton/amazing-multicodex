@@ -2,6 +2,7 @@ export { CreateTaskHandler } from "./application/createTask";
 export type { CreateTaskCommand } from "./application/createTask";
 export { ReviseTaskHandler } from "./application/reviseTask";
 export type { ReviseTaskCommand } from "./application/reviseTask";
+export { ReassignTaskHandler } from "./application/reassignTask";
 export { TaskLifecycleService } from "./application/taskLifecycle";
 export { TaskDependencyService } from "./application/taskDependencyService";
 export { TaskDependencyGraph } from "./domain/dependencyGraph";

@@ -13,6 +13,7 @@ The extension currently provides the core multi-task execution loop:
 
 - persistent tasks, execution associations, approvals, and bounded activity;
 - a persistent project registry with one repository root and base ref per project;
+- project edit, open, and safe removal actions plus draft-task reassignment;
 - a `MultiCodex Projects` dashboard with task, active-work, attention, and
   completion metrics plus clickable task drill-down;
 - a `MultiCodex Tasks` Explorer view with create, start, resume, cancel, and
@@ -95,6 +96,12 @@ Click a child task to open its live detail panel, use inline buttons for its
 next action, or right-click for all available operations. The same operations
 are available from the Command Palette (`Ctrl/Cmd+Shift+P`) under `MultiCodex:`
 and prompt for an eligible task.
+
+Project context actions can create a task directly in that project, edit its
+display name/base ref, open the repository in a new window, or remove its
+registration. Removing a project never deletes the local repository and is
+blocked until its tasks are moved or deleted. Draft tasks can be moved between
+projects; dependencies are deliberately restricted to tasks in one project.
 
 The normal task flow is:
 

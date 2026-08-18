@@ -37,6 +37,7 @@ import {
 } from "./modules/orchestration/public";
 import {
   CreateTaskHandler,
+  ReassignTaskHandler,
   ReviseTaskHandler,
   TaskDependencyService,
   TaskLifecycleService,
@@ -72,6 +73,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const dependencies = new TaskDependencyService(
     dependencyRepository, repository
   );
+  const reassignTask = new ReassignTaskHandler(repository, dependencyRepository, clock);
   const projectTree = new ProjectTreeProvider(projectRepository, repository);
   const ids = new CryptoIdGenerator();
   const codex = new CodexProcessSupervisor(new NodeProcessFactory(), {
@@ -254,7 +256,67 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       if (project) await projectDetails.show(project);
     }),
-    vscode.commands.registerCommand("amazingMultiCodex.createTask", async () => {
+    vscode.commands.registerCommand("amazingMultiCodex.editProject", async (project?: ProjectProps) => {
+      project = await selectProject(project, "Edit a project");
+      if (!project) return;
+      const name = await vscode.window.showInputBox({
+        prompt: "Project display name", value: project.name,
+        validateInput: value => !value.trim() || value.trim().length > 200 ? "Enter a name containing 1 to 200 characters." : undefined
+      });
+      if (!name?.trim()) return;
+      const baseRef = await vscode.window.showInputBox({
+        prompt: "Git base branch or ref", value: project.baseRef,
+        validateInput: value => !value.trim() || value.trim().length > 1_024 || value.trim().startsWith("-") ? "Enter a valid Git ref." : undefined
+      });
+      if (!baseRef?.trim()) return;
+      let baseRefValid = false;
+      try {
+        const verified = await commandRunner.run({
+          executable: "git", args: ["rev-parse", "--verify", `${baseRef.trim()}^{commit}`],
+          cwd: project.repositoryRoot, maxOutputBytes: 4_096
+        });
+        baseRefValid = verified.exitCode === 0 && !verified.truncated;
+      } catch { /* surfaced as an invalid/unavailable ref below */ }
+      if (!baseRefValid) {
+        void vscode.window.showErrorMessage(`Git ref '${baseRef.trim()}' does not resolve to a commit in this project.`);
+        return;
+      }
+      const revised = await projectService.revise(project.id, { name, baseRef });
+      if (!revised.ok) { void vscode.window.showErrorMessage(revised.error.message); return; }
+      refreshViews();
+      await projectDetails.refresh(revised.value);
+      void vscode.window.showInformationMessage(`Updated MultiCodex project: ${revised.value.name}`);
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.removeProject", async (project?: ProjectProps) => {
+      project = await selectProject(project, "Remove a project");
+      if (!project) return;
+      const [listedTasks, listedProjects] = await Promise.all([repository.list(), projectService.list()]);
+      if (!listedTasks.ok) { void vscode.window.showErrorMessage(listedTasks.error.message); return; }
+      if (!listedProjects.ok) { void vscode.window.showErrorMessage(listedProjects.error.message); return; }
+      const firstProject = listedProjects.value[0]?.id;
+      const owned = listedTasks.value.map(task => task.snapshot()).filter(task =>
+        task.projectId === project!.id || (task.projectId === undefined && project!.id === firstProject)
+      );
+      if (owned.length > 0) {
+        void vscode.window.showWarningMessage(`Move or delete the ${owned.length} task(s) in '${project.name}' before removing the project.`);
+        return;
+      }
+      const confirmed = await vscode.window.showWarningMessage(
+        `Remove '${project.name}' from MultiCodex? The local repository will not be deleted.`,
+        { modal: true }, "Remove Project"
+      );
+      if (confirmed !== "Remove Project") return;
+      const removed = await projectService.remove(project.id);
+      if (!removed.ok) { void vscode.window.showErrorMessage(removed.error.message); return; }
+      projectDetails.close(project.id);
+      refreshViews();
+      void vscode.window.showInformationMessage(`Removed MultiCodex project: ${project.name}`);
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.openProject", async (project?: ProjectProps) => {
+      project = await selectProject(project, "Open a project repository");
+      if (project) await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(project.repositoryRoot), { forceNewWindow: true });
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.createTask", async (project?: ProjectProps) => {
       await projectsReady;
       const projects = await projectService.list();
       if (!projects.ok) { void vscode.window.showErrorMessage(projects.error.message); return; }
@@ -262,7 +324,8 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showErrorMessage("Add or open a Git project before creating a task.");
         return;
       }
-      const selectedProject = projects.value.length === 1 ? projects.value[0] : await vscode.window.showQuickPick(
+      const selectedProject = project && projects.value.some(item => item.id === project!.id) ? project
+        : projects.value.length === 1 ? projects.value[0] : await vscode.window.showQuickPick(
         projects.value.map(project => ({ label: project.name, description: project.repositoryRoot, project })),
         { placeHolder: "Choose the project for this task" }
       ).then(item => item?.project);
@@ -382,6 +445,23 @@ export function activate(context: vscode.ExtensionContext): void {
       refreshViews();
       await taskDetails.refresh(task.id);
       void vscode.window.showInformationMessage(`Updated MultiCodex draft: ${revised.value.title}`);
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.moveTask", async (task?: TaskProps) => {
+      task = await selectTask(task, candidate => candidate.status === "draft", "Move a draft task");
+      if (!task) return;
+      const projects = await projectService.list();
+      if (!projects.ok) { void vscode.window.showErrorMessage(projects.error.message); return; }
+      const choices = projects.value.filter(project => project.id !== task!.projectId);
+      if (choices.length === 0) { void vscode.window.showInformationMessage("Add another project before moving this task."); return; }
+      const target = await vscode.window.showQuickPick(choices.map(project => ({
+        label: project.name, description: project.repositoryRoot, project
+      })), { placeHolder: `Move '${task.title}' to a project` }).then(item => item?.project);
+      if (!target) return;
+      const moved = await reassignTask.execute(task.id, target.id);
+      if (!moved.ok) { void vscode.window.showErrorMessage(moved.error.message); return; }
+      refreshViews();
+      await taskDetails.refresh(task.id);
+      void vscode.window.showInformationMessage(`Moved '${task.title}' to '${target.name}'.`);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.showRuntimeStatus", async () => {
       await projectsReady;
@@ -830,7 +910,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       const candidates = listed.value
         .map(candidate => candidate.snapshot())
-        .filter(candidate => candidate.id !== task.id);
+        .filter(candidate => candidate.id !== task.id && candidate.projectId === task.projectId);
       if (candidates.length === 0) {
         void vscode.window.showInformationMessage("Create another task before adding a prerequisite.");
         return;
@@ -1133,6 +1213,19 @@ export function activate(context: vscode.ExtensionContext): void {
       matchOnDetail: true
     });
     return selected?.task;
+  }
+
+  async function selectProject(provided: ProjectProps | undefined, title: string): Promise<ProjectProps | undefined> {
+    if (provided) return provided;
+    const listed = await projectService.list();
+    if (!listed.ok) {
+      void vscode.window.showErrorMessage(listed.error.message);
+      return undefined;
+    }
+    const selected = await vscode.window.showQuickPick(listed.value.map(project => ({
+      label: project.name, description: project.repositoryRoot, detail: `Base ref: ${project.baseRef}`, project
+    })), { title, matchOnDescription: true, matchOnDetail: true });
+    return selected?.project;
   }
 
   function readSettings(): ReturnType<typeof parseSettings> {

@@ -38,6 +38,7 @@ export class ProjectDetailPanelManager implements vscode.Disposable {
       if (project) await this.renderPanel(panel, project);
     }));
   }
+  close(projectId: ProjectProps["id"]): void { this.panels.get(projectId)?.dispose(); }
   dispose(): void { for (const panel of this.panels.values()) panel.dispose(); this.panels.clear(); this.projects.clear(); }
   private async renderPanel(panel: vscode.WebviewPanel, project: ProjectProps): Promise<void> {
     panel.webview.html = render(project, await this.loadTasks(project.id));

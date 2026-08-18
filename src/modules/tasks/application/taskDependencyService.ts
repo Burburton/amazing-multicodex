@@ -24,7 +24,10 @@ export class TaskDependencyService {
     if (!task.ok) return task;
     if (!prerequisite.ok) return prerequisite;
     if (!task.value || !prerequisite.value) return err(notFound());
-    if (task.value.snapshot().status !== "draft") return err(notDraft(taskId));
+    const taskSnapshot = task.value.snapshot();
+    const prerequisiteSnapshot = prerequisite.value.snapshot();
+    if (taskSnapshot.status !== "draft") return err(notDraft(taskId));
+    if (taskSnapshot.projectId !== prerequisiteSnapshot.projectId) return err(crossProject());
     const listed = await this.dependencies.list();
     if (!listed.ok) return listed;
     const graph = new TaskDependencyGraph(listed.value.map(edge => [edge.taskId, edge.prerequisiteId]));
@@ -81,5 +84,14 @@ function notDraft(taskId: TaskId): AppError {
     message: "Task dependencies can only be changed while the task is a draft.",
     retryable: false,
     context: { taskId }
+  };
+}
+
+function crossProject(): AppError {
+  return {
+    code: "task.dependency-cross-project",
+    category: "conflict",
+    message: "Task dependencies must belong to the same project.",
+    retryable: false
   };
 }

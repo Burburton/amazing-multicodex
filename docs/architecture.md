@@ -130,6 +130,7 @@ Owns the local Git repositories managed by the control plane.
 Responsibilities:
 
 - register a repository root, display name, and base ref;
+- revise display metadata and safely remove an empty registration;
 - provide stable project identities for task assignment;
 - keep project persistence behind a repository port;
 - support project-level status projections without coupling the domain to UI.
@@ -172,6 +173,10 @@ type TaskStatus =
 
 `tasks` does not know how Codex runs, how a worktree is created, or how the UI
 renders a task.
+
+Task definitions are movable only while still drafts. Dependency edges may not
+cross project boundaries, keeping scheduling, worktree ownership, and
+integration repositories unambiguous.
 
 ### 5.3 `orchestration`
 

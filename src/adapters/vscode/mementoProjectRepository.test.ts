@@ -39,3 +39,20 @@ test("rejects duplicate repository registration", async () => {
     if (!saved.ok) assert.equal(saved.error.code, "project.repository-duplicate");
   }
 });
+
+test("removes only the requested project", async () => {
+  const state = new FakeState();
+  const repository = new MementoProjectRepository(state);
+  for (const id of ["first", "second"]) {
+    const project = Project.create({
+      id: id as ProjectId, name: id, repositoryRoot: `/workspace/${id}`, baseRef: "main",
+      createdAt: new Date(0), updatedAt: new Date(0)
+    });
+    assert.equal(project.ok, true);
+    if (project.ok) assert.equal((await repository.save(project.value)).ok, true);
+  }
+  assert.equal((await repository.delete("first" as ProjectId)).ok, true);
+  const listed = await repository.list();
+  assert.equal(listed.ok, true);
+  if (listed.ok) assert.deepEqual(listed.value.map(project => project.snapshot().id), ["second"]);
+});
