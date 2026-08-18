@@ -84,6 +84,7 @@ export class StartTaskWorkflow {
       updatedAt: now,
       version: 0,
       stage: { index: 0, total: stages.length, role: firstStage.role },
+      reviewCycles: 0,
       ...(command.model ? { model: command.model } : {})
     };
     const saved = await this.executions.save(execution, -1);
@@ -140,7 +141,8 @@ export class StartTaskWorkflow {
 
 function stagePrompt(stage: AgentStage, task: string): string {
   return [`You are the ${stage.role} stage in a multi-agent task pipeline.`, `Stage objective: ${stage.objective}`, task,
-    "Work only within your role. Inspect the current worktree because earlier stages may have changed it. Finish with a concise handoff for the next role."].join("\n\n");
+    "Work only within your role. Inspect the current worktree because earlier stages may have changed it. Finish with a concise handoff for the next role.",
+    stage.role === "reviewer" ? "End your response with exactly one verdict line: VERDICT: APPROVED or VERDICT: CHANGES_REQUESTED. Explain required changes before the verdict." : ""].filter(Boolean).join("\n\n");
 }
 
 function taskPrompt(title: string, description: string | undefined, criteria: readonly string[]): string {

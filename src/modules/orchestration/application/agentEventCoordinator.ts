@@ -9,6 +9,7 @@ export interface CoordinatorDiagnostics {
 }
 
 const silentDiagnostics: CoordinatorDiagnostics = { error: () => undefined };
+const MAX_REVIEW_CYCLES = 3;
 
 export class AgentEventCoordinator {
   private unsubscribe?: () => void;
@@ -51,6 +52,34 @@ export class AgentEventCoordinator {
     const success = event.status === "completed";
     const handoff = this.handoffs.get(eventKey);
     this.handoffs.delete(eventKey);
+    if (success && this.plans && found.value.stage?.role === "reviewer" && requestsChanges(handoff)) {
+      const plan = await this.plans.findByTask(found.value.taskId);
+      if (!plan.ok) { await this.failStage(found.value, "agent-plan.load-failed", plan.error); return; }
+      const stages = plan.value?.snapshot().stages;
+      const implementerIndex = stages?.findIndex(stage => stage.role === "implementer") ?? -1;
+      const cycles = found.value.reviewCycles ?? 0;
+      if (implementerIndex < 0) { await this.failStage(found.value, "agent-plan.implementer-missing"); return; }
+      if (cycles >= MAX_REVIEW_CYCLES) { await this.failStage(found.value, "agent-plan.review-limit"); return; }
+      const implementer = stages![implementerIndex];
+      try {
+        const agent = await this.agents.start({
+          cwd: found.value.workspace.path, model: found.value.model,
+          prompt: ["You are the implementer stage revising work after review.", `Stage objective: ${implementer.objective}`,
+            "Inspect the shared worktree and address every review finding.", `Reviewer feedback:\n${handoff ?? "Changes were requested without textual feedback."}`,
+            "Finish with a concise handoff for the reviewer."].join("\n\n")
+        });
+        const revised: TaskExecutionRecord = {
+          ...found.value, agent,
+          previousAgents: [...(found.value.previousAgents ?? []), found.value.agent].slice(-8),
+          stage: { index: implementerIndex, total: found.value.stage.total, role: "implementer" },
+          reviewCycles: cycles + 1, updatedAt: this.clock.now(), version: found.value.version + 1
+        };
+        const saved = await this.executions.save(revised, found.value.version);
+        if (!saved.ok) { await this.agents.interrupt(agent); await this.failStage(found.value, "agent-plan.review-return-failed", saved.error); return; }
+        this.diagnostics.taskChanged?.(found.value.taskId, true);
+        return;
+      } catch (cause) { await this.failStage(found.value, "agent-plan.review-return-start-failed", cause); return; }
+    }
     if (success && this.plans && found.value.stage && found.value.stage.index + 1 < found.value.stage.total) {
       const plan = await this.plans.findByTask(found.value.taskId);
       if (!plan.ok) { await this.failStage(found.value, "agent-plan.load-failed", plan.error); return; }
@@ -61,11 +90,12 @@ export class AgentEventCoordinator {
           cwd: found.value.workspace.path,
           model: found.value.model,
           prompt: [`You are the ${next.role} stage in a multi-agent task pipeline.`, `Stage objective: ${next.objective}`,
-            "Inspect the shared worktree and continue from the previous stage.", handoff ? `Previous stage handoff:\n${handoff}` : "No textual handoff was produced; rely on the worktree and task context."].join("\n\n")
+            "Inspect the shared worktree and continue from the previous stage.", handoff ? `Previous stage handoff:\n${handoff}` : "No textual handoff was produced; rely on the worktree and task context.",
+            next.role === "reviewer" ? "End your response with exactly one verdict line: VERDICT: APPROVED or VERDICT: CHANGES_REQUESTED. Explain required changes before the verdict." : ""].filter(Boolean).join("\n\n")
         });
         const advanced: TaskExecutionRecord = {
           ...found.value, agent,
-          previousAgents: [...(found.value.previousAgents ?? []), found.value.agent],
+          previousAgents: [...(found.value.previousAgents ?? []), found.value.agent].slice(-8),
           stage: { index: found.value.stage.index + 1, total: found.value.stage.total, role: next.role },
           updatedAt: this.clock.now(), version: found.value.version + 1
         };
@@ -111,4 +141,8 @@ export class AgentEventCoordinator {
     else this.diagnostics.taskChanged?.(execution.taskId, false);
     this.diagnostics.error("Agent pipeline stage failed.", cause);
   }
+}
+
+function requestsChanges(handoff: string | undefined): boolean {
+  return /(?:^|\n)\s*VERDICT:\s*CHANGES_REQUESTED\s*$/im.test(handoff ?? "");
 }

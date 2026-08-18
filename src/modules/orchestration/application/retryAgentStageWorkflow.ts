@@ -25,7 +25,8 @@ export class RetryAgentStageWorkflow {
     try {
       agent = await this.agents.start({ cwd: current.workspace.path, model: current.model,
         prompt: [`Retry the ${stage.role} stage of this multi-agent task pipeline.`, `Stage objective: ${stage.objective}`,
-          "Inspect the existing worktree and prior changes. Correct the failure and finish with a concise handoff."].join("\n\n") });
+          "Inspect the existing worktree and prior changes. Correct the failure and finish with a concise handoff.",
+          stage.role === "reviewer" ? "End your response with exactly one verdict line: VERDICT: APPROVED or VERDICT: CHANGES_REQUESTED." : ""].filter(Boolean).join("\n\n") });
     } catch (cause) {
       await this.tasks.transition(taskId, "failed", "agent-stage-retry-start-failed");
       return err(startFailed(cause));

@@ -35,6 +35,11 @@ is role-labelled, and a failed stage can be restarted in its existing worktree
 through a compensated workflow that returns partial failures to a terminal
 task state.
 
+Reviewer stages publish an explicit terminal verdict. A changes-requested
+verdict routes the same execution back to its Implementer stage with bounded
+feedback, after which review repeats. The persisted review-cycle counter is
+capped at three; exceeding the cap fails the execution with a diagnostic reason.
+
 ## 1. Purpose
 
 Amazing MultiCodex is a VS Code control plane for coordinating multiple Codex

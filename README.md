@@ -114,6 +114,11 @@ only after the final role completes. Activity entries identify the responsible
 role, and a failed stage can be retried from task details without creating a
 second worktree or restarting the whole pipeline.
 
+Reviewer stages use an explicit verdict protocol. `VERDICT: CHANGES_REQUESTED`
+returns the task to the Implementer with the review handoff, then runs Reviewer
+again. `VERDICT: APPROVED` continues to the next stage. Review feedback loops
+are persisted and capped at three cycles to prevent unbounded execution.
+
 The normal task flow is:
 
 1. Create a task, choose its project, and, if needed, edit the draft with a

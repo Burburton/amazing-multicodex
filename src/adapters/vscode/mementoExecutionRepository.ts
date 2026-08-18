@@ -18,6 +18,7 @@ interface StoredExecution {
   readonly previousAgents?: readonly AgentExecutionRef[];
   readonly stage?: TaskExecutionRecord["stage"];
   readonly model?: string;
+  readonly reviewCycles?: number;
   readonly status: TaskExecutionRecord["status"];
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -170,6 +171,7 @@ function isStoredExecution(value: unknown): value is StoredExecution {
       && Number(stage.total) >= 1 && Number(stage.total) <= 8 && Number(stage.index) < Number(stage.total)
       && ["planner", "implementer", "reviewer", "tester"].includes(String(stage.role))))
     && (execution.model === undefined || (typeof execution.model === "string" && execution.model.length > 0 && execution.model.length <= 500))
+    && (execution.reviewCycles === undefined || (Number.isInteger(execution.reviewCycles) && Number(execution.reviewCycles) >= 0 && Number(execution.reviewCycles) <= 3))
     && ["prepared", "running", "completed", "failed", "cancelled"].includes(String(execution.status))
     && typeof execution.createdAt === "string" && !Number.isNaN(Date.parse(execution.createdAt))
     && typeof execution.updatedAt === "string" && !Number.isNaN(Date.parse(execution.updatedAt))

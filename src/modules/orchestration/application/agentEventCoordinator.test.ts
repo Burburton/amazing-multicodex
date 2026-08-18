@@ -123,8 +123,49 @@ test("starts the next configured role in the same worktree before validation", a
   assert.match(agents.starts[0]?.prompt ?? "", /Implementation complete/);
   const found = await tasks.findById("task-2" as TaskId);
   assert.equal(found.ok && found.value?.snapshot().status, "running");
+  agents.listener?.({ type: "agentMessageDelta", threadId: "thread-2" as AgentThreadId, turnId: "turn-2" as AgentTurnId, delta: "Fix edge case.\nVERDICT: CHANGES_REQUESTED" });
   agents.listener?.({ type: "turnCompleted", threadId: "thread-2" as AgentThreadId, turnId: "turn-2" as AgentTurnId, status: "completed" });
+  await new Promise(resolve => setImmediate(resolve));
+  const returned = await executions.findActiveByTask("task-2" as TaskId);
+  assert.equal(returned.ok && returned.value?.stage?.role, "implementer");
+  assert.equal(returned.ok && returned.value?.reviewCycles, 1);
+  assert.match(agents.starts[1]?.prompt ?? "", /Fix edge case/);
+  agents.listener?.({ type: "agentMessageDelta", threadId: "thread-3" as AgentThreadId, turnId: "turn-3" as AgentTurnId, delta: "Edge case fixed." });
+  agents.listener?.({ type: "turnCompleted", threadId: "thread-3" as AgentThreadId, turnId: "turn-3" as AgentTurnId, status: "completed" });
+  await new Promise(resolve => setImmediate(resolve));
+  const reviewingAgain = await executions.findActiveByTask("task-2" as TaskId);
+  assert.equal(reviewingAgain.ok && reviewingAgain.value?.stage?.role, "reviewer");
+  assert.match(agents.starts[2]?.prompt ?? "", /VERDICT: APPROVED/);
+  agents.listener?.({ type: "agentMessageDelta", threadId: "thread-4" as AgentThreadId, turnId: "turn-4" as AgentTurnId, delta: "Looks good.\nVERDICT: APPROVED" });
+  agents.listener?.({ type: "turnCompleted", threadId: "thread-4" as AgentThreadId, turnId: "turn-4" as AgentTurnId, status: "completed" });
   await new Promise(resolve => setImmediate(resolve));
   const completed = await tasks.findById("task-2" as TaskId);
   assert.equal(completed.ok && completed.value?.snapshot().status, "validating");
+});
+
+test("fails a pipeline after three requested-change review cycles", async () => {
+  const clock = new FixedClock();
+  const tasks = new InMemoryTaskRepository();
+  const task = Task.create({ id: "limited" as TaskId, title: "Limited", now: clock.now() });
+  assert.equal(task.ok, true);
+  if (!task.ok) return;
+  for (const status of ["queued", "preparing", "running"] as const) task.value.transition(status, clock.now());
+  await tasks.save(task.value, -1);
+  const executions = new InMemoryExecutionRepository();
+  await executions.save({ id: "limited-execution" as TaskExecutionId, taskId: "limited" as TaskId,
+    workspace: { id: "limited-workspace" as WorkspaceId, taskId: "limited" as TaskId, repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/limited", branch: "branch", baseRef: "main" },
+    agent: { executionId: "limited-agent" as ExecutionId, threadId: "limited-thread" as AgentThreadId, turnId: "limited-turn" as AgentTurnId },
+    stage: { index: 1, total: 2, role: "reviewer" }, reviewCycles: 3, status: "running", createdAt: clock.now(), updatedAt: clock.now(), version: 0 }, -1);
+  const plan = AgentPlan.create({ taskId: "limited" as TaskId, stages: agentPlanTemplate("reviewed"), updatedAt: clock.now() });
+  assert.equal(plan.ok, true);
+  if (!plan.ok) return;
+  const agents = new FakeAgent();
+  new AgentEventCoordinator(agents, executions, new TaskLifecycleService(tasks, clock), clock, undefined, new Plans(plan.value)).start();
+  agents.listener?.({ type: "agentMessageDelta", threadId: "limited-thread" as AgentThreadId, turnId: "limited-turn" as AgentTurnId, delta: "Still wrong.\nVERDICT: CHANGES_REQUESTED" });
+  agents.listener?.({ type: "turnCompleted", threadId: "limited-thread" as AgentThreadId, turnId: "limited-turn" as AgentTurnId, status: "completed" });
+  await new Promise(resolve => setImmediate(resolve));
+  const failed = await tasks.findById("limited" as TaskId);
+  assert.equal(failed.ok && failed.value?.snapshot().status, "failed");
+  assert.equal(failed.ok && failed.value?.snapshot().statusReason, "agent-plan.review-limit");
+  assert.equal(agents.starts.length, 0);
 });

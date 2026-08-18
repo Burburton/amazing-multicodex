@@ -15,6 +15,7 @@ export interface TaskExecutionRecord {
   readonly previousAgents?: readonly AgentExecutionRef[];
   readonly stage?: { readonly index: number; readonly total: number; readonly role: AgentRole };
   readonly model?: string;
+  readonly reviewCycles?: number;
   readonly status: TaskExecutionStatus;
   readonly createdAt: Date;
   readonly updatedAt: Date;
