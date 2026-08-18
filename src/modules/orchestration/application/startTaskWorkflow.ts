@@ -1,7 +1,7 @@
 import { Clock } from "../../../shared/core/clock";
 import { IdGenerator } from "../../../shared/core/idGenerator";
 import { AppError, Result, err, ok } from "../../../shared/core/result";
-import { AgentRuntimePort } from "../../agents/public";
+import { AgentPlanRepository, AgentRuntimePort, AgentStage, agentPlanTemplate } from "../../agents/public";
 import { TaskDependencyService, TaskId, TaskLifecycleService } from "../../tasks/public";
 import { WorkspaceId, WorkspacePort, workspaceBranch } from "../../workspaces/public";
 import { ExecutionCapacityGate } from "../domain/executionCapacityGate";
@@ -26,7 +26,8 @@ export class StartTaskWorkflow {
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
     private readonly capacity: ExecutionCapacityGate,
-    private readonly dependencies: TaskDependencyService
+    private readonly dependencies: TaskDependencyService,
+    private readonly agentPlans?: AgentPlanRepository
   ) {}
 
   async execute(command: StartTaskWorkflowCommand): Promise<Result<TaskExecutionRecord>> {
@@ -51,6 +52,10 @@ export class StartTaskWorkflow {
     const ready = await this.dependencies.prerequisitesSatisfied(command.taskId);
     if (!ready.ok) return ready;
     if (!ready.value) return err(prerequisitesIncomplete(command.taskId));
+    const configured = this.agentPlans ? await this.agentPlans.findByTask(command.taskId) : ok(undefined);
+    if (!configured.ok) return configured;
+    const stages = configured.value?.snapshot().stages ?? agentPlanTemplate("solo");
+    const firstStage = stages[0];
 
     const preparing = await this.tasks.transition(command.taskId, "preparing");
     if (!preparing.ok) return preparing;
@@ -77,7 +82,9 @@ export class StartTaskWorkflow {
       status: "prepared",
       createdAt: now,
       updatedAt: now,
-      version: 0
+      version: 0,
+      stage: { index: 0, total: stages.length, role: firstStage.role },
+      ...(command.model ? { model: command.model } : {})
     };
     const saved = await this.executions.save(execution, -1);
     if (!saved.ok) {
@@ -89,7 +96,7 @@ export class StartTaskWorkflow {
 
     try {
       const agent = await this.agents.start({
-        prompt: command.prompt?.trim() || taskPrompt(task.value.title, task.value.description, task.value.acceptanceCriteria),
+        prompt: stagePrompt(firstStage, command.prompt?.trim() || taskPrompt(task.value.title, task.value.description, task.value.acceptanceCriteria)),
         cwd: prepared.value.path,
         model: command.model
       });
@@ -129,6 +136,11 @@ export class StartTaskWorkflow {
       version: execution.version + 1
     }, execution.version);
   }
+}
+
+function stagePrompt(stage: AgentStage, task: string): string {
+  return [`You are the ${stage.role} stage in a multi-agent task pipeline.`, `Stage objective: ${stage.objective}`, task,
+    "Work only within your role. Inspect the current worktree because earlier stages may have changed it. Finish with a concise handoff for the next role."].join("\n\n");
 }
 
 function taskPrompt(title: string, description: string | undefined, criteria: readonly string[]): string {

@@ -1,24 +1,26 @@
 import { Clock } from "../../../shared/core/clock";
-import { AgentRuntimeEvent, AgentRuntimePort } from "../../agents/public";
+import { AgentPlanRepository, AgentRuntimeEvent, AgentRuntimePort } from "../../agents/public";
 import { TaskLifecycleService } from "../../tasks/public";
 import { ExecutionRepository, TaskExecutionRecord } from "../ports/executionRepository";
 
 export interface CoordinatorDiagnostics {
   readonly error: (message: string, cause?: unknown) => void;
-  readonly taskChanged?: (taskId: TaskExecutionRecord["taskId"]) => void;
+  readonly taskChanged?: (taskId: TaskExecutionRecord["taskId"], remainsActive: boolean) => void;
 }
 
 const silentDiagnostics: CoordinatorDiagnostics = { error: () => undefined };
 
 export class AgentEventCoordinator {
   private unsubscribe?: () => void;
+  private readonly handoffs = new Map<string, string>();
 
   constructor(
     private readonly agents: AgentRuntimePort,
     private readonly executions: ExecutionRepository,
     private readonly tasks: TaskLifecycleService,
     private readonly clock: Clock,
-    private readonly diagnostics: CoordinatorDiagnostics = silentDiagnostics
+    private readonly diagnostics: CoordinatorDiagnostics = silentDiagnostics,
+    private readonly plans?: AgentPlanRepository
   ) {}
 
   start(): void {
@@ -29,9 +31,15 @@ export class AgentEventCoordinator {
   stop(): void {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
+    this.handoffs.clear();
   }
 
   private async handle(event: AgentRuntimeEvent): Promise<void> {
+    const eventKey = `${event.threadId}\0${event.turnId}`;
+    if (event.type === "agentMessageDelta") {
+      this.handoffs.set(eventKey, ((this.handoffs.get(eventKey) ?? "") + event.delta).slice(-20_000));
+      return;
+    }
     if (event.type !== "turnCompleted") return;
     const found = await this.executions.findByAgent(event.threadId, event.turnId);
     if (!found.ok) {
@@ -39,7 +47,37 @@ export class AgentEventCoordinator {
       return;
     }
     if (!found.value || found.value.status !== "running") return;
+    if (found.value.agent?.threadId !== event.threadId || found.value.agent.turnId !== event.turnId) return;
     const success = event.status === "completed";
+    const handoff = this.handoffs.get(eventKey);
+    this.handoffs.delete(eventKey);
+    if (success && this.plans && found.value.stage && found.value.stage.index + 1 < found.value.stage.total) {
+      const plan = await this.plans.findByTask(found.value.taskId);
+      if (!plan.ok) { await this.failStage(found.value, "agent-plan.load-failed", plan.error); return; }
+      const next = plan.value?.snapshot().stages[found.value.stage.index + 1];
+      if (!next) { await this.failStage(found.value, "agent-plan.stage-missing"); return; }
+      try {
+        const agent = await this.agents.start({
+          cwd: found.value.workspace.path,
+          model: found.value.model,
+          prompt: [`You are the ${next.role} stage in a multi-agent task pipeline.`, `Stage objective: ${next.objective}`,
+            "Inspect the shared worktree and continue from the previous stage.", handoff ? `Previous stage handoff:\n${handoff}` : "No textual handoff was produced; rely on the worktree and task context."].join("\n\n")
+        });
+        const advanced: TaskExecutionRecord = {
+          ...found.value, agent,
+          previousAgents: [...(found.value.previousAgents ?? []), found.value.agent],
+          stage: { index: found.value.stage.index + 1, total: found.value.stage.total, role: next.role },
+          updatedAt: this.clock.now(), version: found.value.version + 1
+        };
+        const saved = await this.executions.save(advanced, found.value.version);
+        if (!saved.ok) { await this.agents.interrupt(agent); await this.failStage(found.value, "agent-plan.advance-failed", saved.error); return; }
+        this.diagnostics.taskChanged?.(found.value.taskId, true);
+        return;
+      } catch (cause) {
+        await this.failStage(found.value, "agent-plan.start-failed", cause);
+        return;
+      }
+    }
     const updated: TaskExecutionRecord = {
       ...found.value,
       status: success ? "completed" : event.status === "interrupted" ? "cancelled" : "failed",
@@ -59,7 +97,18 @@ export class AgentEventCoordinator {
     if (!transitioned.ok) {
       this.diagnostics.error("Could not advance task after agent completion.", transitioned.error);
     } else {
-      this.diagnostics.taskChanged?.(found.value.taskId);
+      this.diagnostics.taskChanged?.(found.value.taskId, false);
     }
+  }
+
+  private async failStage(execution: TaskExecutionRecord, reason: string, cause?: unknown): Promise<void> {
+    const saved = await this.executions.save({
+      ...execution, status: "failed", updatedAt: this.clock.now(), version: execution.version + 1
+    }, execution.version);
+    if (!saved.ok) this.diagnostics.error("Could not persist failed agent stage.", saved.error);
+    const transitioned = await this.tasks.transition(execution.taskId, "failed", reason);
+    if (!transitioned.ok) this.diagnostics.error("Could not fail task after agent stage error.", transitioned.error);
+    else this.diagnostics.taskChanged?.(execution.taskId, false);
+    this.diagnostics.error("Agent pipeline stage failed.", cause);
   }
 }

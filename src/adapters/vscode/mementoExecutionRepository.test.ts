@@ -30,10 +30,13 @@ test("persists and resolves execution by agent identity", async () => {
       baseRef: "main"
     },
     agent: {
-      executionId: "agent-1" as ExecutionId,
-      threadId: "thread-1" as AgentThreadId,
-      turnId: "turn-1" as AgentTurnId
+      executionId: "agent-2" as ExecutionId,
+      threadId: "thread-2" as AgentThreadId,
+      turnId: "turn-2" as AgentTurnId
     },
+    previousAgents: [{ executionId: "agent-1" as ExecutionId, threadId: "thread-1" as AgentThreadId, turnId: "turn-1" as AgentTurnId }],
+    stage: { index: 1, total: 2, role: "reviewer" },
+    model: "gpt-test",
     status: "running",
     createdAt: new Date("2026-08-15T12:00:00Z"),
     updatedAt: new Date("2026-08-15T12:00:00Z"),
@@ -44,6 +47,8 @@ test("persists and resolves execution by agent identity", async () => {
   assert.equal(found.ok, true);
   if (!found.ok || !found.value) return;
   assert.equal(found.value.id, "execution-1");
+  assert.equal(found.value.stage?.role, "reviewer");
+  assert.equal(found.value.model, "gpt-test");
   assert.equal(found.value.createdAt instanceof Date, true);
 });
 

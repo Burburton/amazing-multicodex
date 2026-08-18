@@ -28,7 +28,8 @@ export class InMemoryExecutionRepository implements ExecutionRepository {
 
   async findByAgent(threadId: AgentThreadId, turnId: AgentTurnId): Promise<Result<TaskExecutionRecord | undefined>> {
     return ok([...this.records.values()].find(record =>
-      record.agent?.threadId === threadId && record.agent.turnId === turnId
+      (record.agent?.threadId === threadId && record.agent.turnId === turnId)
+      || record.previousAgents?.some(agent => agent.threadId === threadId && agent.turnId === turnId)
     ));
   }
 

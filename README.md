@@ -107,8 +107,10 @@ blocked until its tasks are moved or deleted. Draft tasks can be moved between
 projects; dependencies are deliberately restricted to tasks in one project.
 
 Draft task details expose `Configure agents` for defining the planned role
-pipeline. The current runtime still executes one Codex session per task; staged
-multi-session execution is the next orchestration increment.
+pipeline. Each configured stage runs as an independent Codex session in the
+same isolated worktree. The next role receives a bounded textual handoff and
+must inspect the accumulated workspace before continuing. Validation starts
+only after the final role completes.
 
 The normal task flow is:
 

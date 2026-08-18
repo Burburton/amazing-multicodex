@@ -100,7 +100,7 @@ function render(detail: TaskDetailViewModel): string {
     ? `<ul>${detail.prerequisites.map(item => `<li>${escapeHtml(item.title)} <span class="badge">${escapeHtml(item.status)}</span></li>`).join("")}</ul>`
     : '<p class="muted">No prerequisites.</p>';
   const execution = detail.latestExecution
-    ? `<dl><dt>Status</dt><dd>${escapeHtml(detail.latestExecution.status)}</dd><dt>Branch</dt><dd><code>${escapeHtml(detail.latestExecution.workspace.branch)}</code></dd><dt>Worktree</dt><dd><code>${escapeHtml(detail.latestExecution.workspace.path)}</code></dd></dl>`
+    ? `<dl><dt>Status</dt><dd>${escapeHtml(detail.latestExecution.status)}</dd>${detail.latestExecution.stage ? `<dt>Agent stage</dt><dd>${escapeHtml(roleLabel(detail.latestExecution.stage.role))} · ${detail.latestExecution.stage.index + 1} of ${detail.latestExecution.stage.total}</dd><dt>Completed stages</dt><dd>${detail.latestExecution.previousAgents?.length ?? 0}</dd>` : ""}<dt>Branch</dt><dd><code>${escapeHtml(detail.latestExecution.workspace.branch)}</code></dd><dt>Worktree</dt><dd><code>${escapeHtml(detail.latestExecution.workspace.path)}</code></dd></dl>`
     : '<p class="muted">No execution yet.</p>';
   const agentPlan = detail.agentPlan?.stages.length
     ? `<ol>${detail.agentPlan.stages.map(stage => `<li><strong>${escapeHtml(roleLabel(stage.role))}</strong><div class="muted">${escapeHtml(stage.objective)}</div></li>`).join("")}</ol>`
@@ -120,7 +120,7 @@ body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);paddin
 </style></head><body>
 <h1>${escapeHtml(task.title)}</h1><div class="meta"><span class="badge">${escapeHtml(taskStatusLabel(task.status))}</span><span>${escapeHtml(taskPriorityLabel(task.priority))} priority</span><span class="muted">Updated ${escapeHtml(task.updatedAt.toLocaleString())}</span></div>
 ${task.description ? `<p>${escapeHtml(task.description)}</p>` : ""}${statusReason}<div class="actions">${actions}</div>
-<h2>Agent pipeline <span class="muted">(planned stages)</span></h2>${agentPlan}<h2>Acceptance criteria</h2>${criteria}<h2>Prerequisites</h2>${prerequisites}<h2>Latest execution</h2>${execution}<h2>Activity</h2>${activity}
+<h2>Agent pipeline</h2>${agentPlan}<h2>Acceptance criteria</h2>${criteria}<h2>Prerequisites</h2>${prerequisites}<h2>Latest execution</h2>${execution}<h2>Activity</h2>${activity}
 <script nonce="${nonce}">const vscode=acquireVsCodeApi();const buttons=[...document.querySelectorAll('[data-action]')];buttons.forEach(button=>button.addEventListener('click',()=>{buttons.forEach(item=>item.disabled=true);vscode.postMessage({version:1,type:'action',action:button.dataset.action});}));</script>
 </body></html>`;
 }

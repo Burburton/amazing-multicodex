@@ -591,7 +591,8 @@ export function activate(context: vscode.ExtensionContext): void {
             clock,
             ids,
             capacity,
-            dependencies
+            dependencies,
+            agentPlanRepository
           );
           connectedTasks.add(task.id);
           const started = await workflow.execute({
@@ -1069,7 +1070,7 @@ export function activate(context: vscode.ExtensionContext): void {
       bindAgent(agent, settings.value.maxActivityCharacters);
       const starter = new StartTaskWorkflow(
         lifecycle, gitWorkspaces, agent,
-        executions, clock, ids, capacity, dependencies
+        executions, clock, ids, capacity, dependencies, agentPlanRepository
       );
       const dispatched = await new DispatchQueuedTasksWorkflow(
         repository, executions, dependencies, new SchedulerPolicy(), starter
@@ -1148,13 +1149,14 @@ export function activate(context: vscode.ExtensionContext): void {
     coordinator?.stop();
     coordinator = new AgentEventCoordinator(agent, executions, lifecycle, clock, {
       error: (message, error) => console.error(message, error),
-      taskChanged: taskId => {
-        connectedTasks.delete(taskId);
+      taskChanged: (taskId, remainsActive) => {
+        if (remainsActive) connectedTasks.add(taskId);
+        else connectedTasks.delete(taskId);
       refreshViews();
         void taskDetails.refresh(taskId);
         void dispatchQueue(false);
       }
-    });
+    }, agentPlanRepository);
     coordinator.start();
     activityBridge?.stop();
     activityBridge = new AgentActivityBridge(agent, executions, activity, maxActivityCharacters, {

@@ -15,6 +15,9 @@ interface StoredExecution {
   readonly taskId: string;
   readonly workspace: WorkspaceRef;
   readonly agent?: AgentExecutionRef;
+  readonly previousAgents?: readonly AgentExecutionRef[];
+  readonly stage?: TaskExecutionRecord["stage"];
+  readonly model?: string;
   readonly status: TaskExecutionRecord["status"];
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -66,7 +69,8 @@ export class MementoExecutionRepository implements ExecutionRepository {
     const records = this.records();
     if (!records.ok) return records;
     return ok(toDomainOptional(records.value.find(record =>
-      record.agent?.threadId === threadId && record.agent.turnId === turnId
+      (record.agent?.threadId === threadId && record.agent.turnId === turnId)
+      || record.previousAgents?.some(agent => agent.threadId === threadId && agent.turnId === turnId)
     )));
   }
 
@@ -148,6 +152,8 @@ function isStoredExecution(value: unknown): value is StoredExecution {
   const execution = value as Record<string, unknown>;
   const workspace = execution.workspace as Record<string, unknown> | undefined;
   const agent = execution.agent as Record<string, unknown> | undefined;
+  const previousAgents = execution.previousAgents as Array<Record<string, unknown>> | undefined;
+  const stage = execution.stage as Record<string, unknown> | undefined;
   return boundedString(execution.id, 1_000)
     && boundedString(execution.taskId, 1_000)
     && !!workspace && boundedString(workspace.id, 1_000)
@@ -158,6 +164,12 @@ function isStoredExecution(value: unknown): value is StoredExecution {
     && (agent === undefined || (
       boundedString(agent.executionId, 4_096) && boundedString(agent.threadId, 4_096) && boundedString(agent.turnId, 4_096)
     ))
+    && (previousAgents === undefined || (Array.isArray(previousAgents) && previousAgents.length <= 8 && previousAgents.every(item =>
+      boundedString(item.executionId, 4_096) && boundedString(item.threadId, 4_096) && boundedString(item.turnId, 4_096))))
+    && (stage === undefined || (Number.isInteger(stage.index) && Number(stage.index) >= 0 && Number.isInteger(stage.total)
+      && Number(stage.total) >= 1 && Number(stage.total) <= 8 && Number(stage.index) < Number(stage.total)
+      && ["planner", "implementer", "reviewer", "tester"].includes(String(stage.role))))
+    && (execution.model === undefined || (typeof execution.model === "string" && execution.model.length > 0 && execution.model.length <= 500))
     && ["prepared", "running", "completed", "failed", "cancelled"].includes(String(execution.status))
     && typeof execution.createdAt === "string" && !Number.isNaN(Date.parse(execution.createdAt))
     && typeof execution.updatedAt === "string" && !Number.isNaN(Date.parse(execution.updatedAt))
@@ -180,8 +192,9 @@ function hasConsistentAssociations(records: readonly StoredExecution[]): boolean
       if (activeTasks.has(record.taskId)) return false;
       activeTasks.add(record.taskId);
     }
-    if (record.agent) {
-      const key = `${record.agent.threadId}\0${record.agent.turnId}`;
+    for (const agent of [record.agent, ...(record.previousAgents ?? [])]) {
+      if (!agent) continue;
+      const key = `${agent.threadId}\0${agent.turnId}`;
       if (agentTurns.has(key)) return false;
       agentTurns.add(key);
     }

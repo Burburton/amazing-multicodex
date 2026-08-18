@@ -27,9 +27,10 @@ a separate approval inbox, transactional persistence/outbox, and live Codex
 thread-state reconciliation remain future increments.
 
 Per-task agent plans are persisted as ordered, bounded role pipelines and shown
-in task details. Runtime execution intentionally remains on the existing
-single-session workflow until stage-level records and recoverable handoffs can
-be introduced together.
+in task details. Each stage runs in an independent Codex session against the
+same isolated worktree. Execution records retain the current stage and bounded
+prior agent identities, while the next role receives a bounded textual handoff.
+Only the final successful stage advances the task to validation.
 
 ## 1. Purpose
 

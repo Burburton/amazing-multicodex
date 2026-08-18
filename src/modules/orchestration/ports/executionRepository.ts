@@ -1,6 +1,6 @@
 import { Brand } from "../../../shared/core/brand";
 import { Result } from "../../../shared/core/result";
-import { AgentExecutionRef, AgentThreadId, AgentTurnId } from "../../agents/public";
+import { AgentExecutionRef, AgentRole, AgentThreadId, AgentTurnId } from "../../agents/public";
 import { TaskId } from "../../tasks/public";
 import { WorkspaceRef } from "../../workspaces/public";
 
@@ -12,6 +12,9 @@ export interface TaskExecutionRecord {
   readonly taskId: TaskId;
   readonly workspace: WorkspaceRef;
   readonly agent?: AgentExecutionRef;
+  readonly previousAgents?: readonly AgentExecutionRef[];
+  readonly stage?: { readonly index: number; readonly total: number; readonly role: AgentRole };
+  readonly model?: string;
   readonly status: TaskExecutionStatus;
   readonly createdAt: Date;
   readonly updatedAt: Date;
