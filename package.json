@@ -41,6 +41,7 @@
     "onCommand:amazingMultiCodex.removeProject",
     "onCommand:amazingMultiCodex.openProject",
     "onCommand:amazingMultiCodex.moveTask",
+    "onCommand:amazingMultiCodex.configureTaskAgents",
     "onCommand:amazingMultiCodex.createTask",
     "onCommand:amazingMultiCodex.editTask",
     "onCommand:amazingMultiCodex.refreshTasks",
@@ -208,6 +209,11 @@
         "command": "amazingMultiCodex.moveTask",
         "title": "MultiCodex: Move Task to Project",
         "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "amazingMultiCodex.configureTaskAgents",
+        "title": "MultiCodex: Configure Task Agents",
+        "icon": "$(organization)"
       },
       {
         "command": "amazingMultiCodex.createTask",
@@ -441,6 +447,11 @@
           "command": "amazingMultiCodex.moveTask",
           "when": "view == amazingMultiCodex.projects && viewItem == multicodexTask.draft",
           "group": "navigation@4"
+        },
+        {
+          "command": "amazingMultiCodex.configureTaskAgents",
+          "when": "view == amazingMultiCodex.projects && viewItem == multicodexTask.draft",
+          "group": "navigation@5"
         },
         {
           "command": "amazingMultiCodex.releaseWorkspace",

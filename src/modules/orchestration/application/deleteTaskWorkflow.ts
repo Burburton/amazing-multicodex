@@ -7,6 +7,7 @@ import {
 } from "../../tasks/public";
 import { WorkspacePort } from "../../workspaces/public";
 import { ExecutionDeletionRepository, ExecutionRepository } from "../ports/executionRepository";
+import { AgentPlanRepository } from "../../agents/public";
 
 const deletableStatuses = new Set<TaskStatus>([
   "draft", "readyForReview", "completed", "blocked", "failed", "cancelled"
@@ -20,7 +21,8 @@ export class DeleteTaskWorkflow {
     private readonly executions: ExecutionRepository & ExecutionDeletionRepository,
     private readonly approvals: ApprovalDeletionRepository,
     private readonly activity: ActivityDeletionRepository,
-    private readonly workspaces: WorkspacePort
+    private readonly workspaces: WorkspacePort,
+    private readonly agentPlans?: Pick<AgentPlanRepository, "deleteByTask">
   ) {}
 
   async execute(taskId: TaskId, forceWorkspace = false): Promise<Result<void>> {
@@ -46,7 +48,8 @@ export class DeleteTaskWorkflow {
       () => this.executions.deleteByTask(taskId),
       () => this.approvals.deleteByTask(taskId),
       () => this.activity.deleteByTask(taskId),
-      () => this.dependencies.deleteByTask(taskId)
+      () => this.dependencies.deleteByTask(taskId),
+      ...(this.agentPlans ? [() => this.agentPlans!.deleteByTask(taskId)] : [])
     ]) {
       const result = await cleanup();
       if (!result.ok) return result;

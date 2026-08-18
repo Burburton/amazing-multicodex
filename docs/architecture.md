@@ -26,6 +26,11 @@ Approval requests and decisions are projected into the task activity timeline;
 a separate approval inbox, transactional persistence/outbox, and live Codex
 thread-state reconciliation remain future increments.
 
+Per-task agent plans are persisted as ordered, bounded role pipelines and shown
+in task details. Runtime execution intentionally remains on the existing
+single-session workflow until stage-level records and recoverable handoffs can
+be introduced together.
+
 ## 1. Purpose
 
 Amazing MultiCodex is a VS Code control plane for coordinating multiple Codex
@@ -214,6 +219,8 @@ Responsibilities:
 - normalize streamed items into stable project events;
 - track connection and execution state independently;
 - expose model and collaboration-mode capabilities.
+- own validated task role plans (`planner`, `implementer`, `reviewer`, and
+  `tester`) independently from runtime session records.
 
 This module defines `AgentRuntimePort`. The Codex adapter implements it. No
 other module knows about JSON-RPC methods such as `thread/start` or

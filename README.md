@@ -17,8 +17,10 @@ The extension currently provides the core multi-task execution loop:
 - a `MultiCodex Projects` dashboard with task, active-work, attention, and
   completion metrics, intent-based task groups, search/filter controls, recent
   update visibility, and clickable task drill-down;
-- a `MultiCodex Tasks` Explorer view with create, start, resume, cancel, and
-  activity commands;
+- a hierarchical `Project -> Tasks` Explorer tree with create, start, resume,
+  cancel, and activity commands;
+- persistent task agent pipeline configuration with Solo, planning, review,
+  and full delivery templates shown in task details;
 - command-palette task selection filtered to the states accepted by each action;
 - actionable runtime readiness checks for Codex, Git, and the configured base ref;
 - one isolated Git worktree and branch per task execution;
@@ -103,6 +105,10 @@ display name/base ref, open the repository in a new window, or remove its
 registration. Removing a project never deletes the local repository and is
 blocked until its tasks are moved or deleted. Draft tasks can be moved between
 projects; dependencies are deliberately restricted to tasks in one project.
+
+Draft task details expose `Configure agents` for defining the planned role
+pipeline. The current runtime still executes one Codex session per task; staged
+multi-session execution is the next orchestration increment.
 
 The normal task flow is:
 

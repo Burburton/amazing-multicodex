@@ -2,12 +2,15 @@ import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
 import { TaskDetailProjection } from "../modules/orchestration/public";
 import { TaskId, TaskProps } from "../modules/tasks/public";
+import { AgentPlanProps } from "../modules/agents/public";
 import { taskPriorityLabel, taskStatusLabel } from "./taskPresentation";
 
-export type TaskDetailAction = "edit" | "queue" | "start" | "resume" | "steer" | "cancel" | "validate" | "changes" | "integrate" | "recoverIntegration" | "release" | "delete";
+export type TaskDetailAction = "edit" | "configureAgents" | "queue" | "start" | "resume" | "steer" | "cancel" | "validate" | "changes" | "integrate" | "recoverIntegration" | "release" | "delete";
+
+export interface TaskDetailViewModel extends TaskDetailProjection { readonly agentPlan?: AgentPlanProps }
 
 const allowedActions = new Set<TaskDetailAction>([
-  "edit", "queue", "start", "resume", "steer", "cancel", "validate", "changes", "integrate", "recoverIntegration", "release", "delete"
+  "edit", "configureAgents", "queue", "start", "resume", "steer", "cancel", "validate", "changes", "integrate", "recoverIntegration", "release", "delete"
 ]);
 
 export class TaskDetailPanelManager implements vscode.Disposable {
@@ -15,7 +18,7 @@ export class TaskDetailPanelManager implements vscode.Disposable {
   private readonly actionsInFlight = new Set<TaskId>();
 
   constructor(
-    private readonly load: (taskId: TaskId) => Promise<TaskDetailProjection | undefined>,
+    private readonly load: (taskId: TaskId) => Promise<TaskDetailViewModel | undefined>,
     private readonly onAction: (action: TaskDetailAction, task: TaskProps) => Promise<void>,
     private readonly onError: (message: string, cause: unknown) => void = () => undefined
   ) {}
@@ -87,7 +90,7 @@ function isActionMessage(message: unknown): message is { version: 1; type: "acti
     && allowedActions.has(candidate.action as TaskDetailAction);
 }
 
-function render(detail: TaskDetailProjection): string {
+function render(detail: TaskDetailViewModel): string {
   const nonce = randomBytes(18).toString("base64");
   const task = detail.task;
   const criteria = task.acceptanceCriteria.length
@@ -99,6 +102,9 @@ function render(detail: TaskDetailProjection): string {
   const execution = detail.latestExecution
     ? `<dl><dt>Status</dt><dd>${escapeHtml(detail.latestExecution.status)}</dd><dt>Branch</dt><dd><code>${escapeHtml(detail.latestExecution.workspace.branch)}</code></dd><dt>Worktree</dt><dd><code>${escapeHtml(detail.latestExecution.workspace.path)}</code></dd></dl>`
     : '<p class="muted">No execution yet.</p>';
+  const agentPlan = detail.agentPlan?.stages.length
+    ? `<ol>${detail.agentPlan.stages.map(stage => `<li><strong>${escapeHtml(roleLabel(stage.role))}</strong><div class="muted">${escapeHtml(stage.objective)}</div></li>`).join("")}</ol>`
+    : '<p class="muted">Single Implementer agent (default). Configure a planned role pipeline while this task is a draft.</p>';
   const activity = detail.activity.length
     ? detail.activity.map(item => `<article><header><span class="badge">${escapeHtml(item.kind)}</span><strong>${escapeHtml(item.summary)}</strong><time>${escapeHtml(item.occurredAt.toLocaleString())}</time></header>${item.detail ? `<pre>${escapeHtml(item.detail)}</pre>` : ""}</article>`).join("")
     : '<p class="muted">No activity recorded.</p>';
@@ -114,7 +120,7 @@ body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);paddin
 </style></head><body>
 <h1>${escapeHtml(task.title)}</h1><div class="meta"><span class="badge">${escapeHtml(taskStatusLabel(task.status))}</span><span>${escapeHtml(taskPriorityLabel(task.priority))} priority</span><span class="muted">Updated ${escapeHtml(task.updatedAt.toLocaleString())}</span></div>
 ${task.description ? `<p>${escapeHtml(task.description)}</p>` : ""}${statusReason}<div class="actions">${actions}</div>
-<h2>Acceptance criteria</h2>${criteria}<h2>Prerequisites</h2>${prerequisites}<h2>Latest execution</h2>${execution}<h2>Activity</h2>${activity}
+<h2>Agent pipeline <span class="muted">(planned stages)</span></h2>${agentPlan}<h2>Acceptance criteria</h2>${criteria}<h2>Prerequisites</h2>${prerequisites}<h2>Latest execution</h2>${execution}<h2>Activity</h2>${activity}
 <script nonce="${nonce}">const vscode=acquireVsCodeApi();const buttons=[...document.querySelectorAll('[data-action]')];buttons.forEach(button=>button.addEventListener('click',()=>{buttons.forEach(item=>item.disabled=true);vscode.postMessage({version:1,type:'action',action:button.dataset.action});}));</script>
 </body></html>`;
 }
@@ -126,7 +132,7 @@ function actionsFor(
 ): readonly { id: TaskDetailAction; label: string }[] {
   const inspect = hasExecution ? [{ id: "changes" as const, label: "View changes" }] : [];
   switch (status) {
-    case "draft": return [{ id: "edit", label: "Edit draft" }, { id: "queue", label: "Queue task" }, { id: "delete", label: "Delete task" }];
+    case "draft": return [{ id: "edit", label: "Edit draft" }, { id: "configureAgents", label: "Configure agents" }, { id: "queue", label: "Queue task" }, { id: "delete", label: "Delete task" }];
     case "failed": return [...inspect, { id: "queue", label: "Queue task" }, { id: "delete", label: "Delete task" }];
     case "cancelled": return [
       ...inspect,
@@ -151,6 +157,10 @@ function actionsFor(
     case "deleting": return [{ id: "delete", label: "Retry deletion" }];
     default: return [];
   }
+}
+
+function roleLabel(role: AgentPlanProps["stages"][number]["role"]): string {
+  return role[0].toUpperCase() + role.slice(1);
 }
 
 function escapeHtml(value: string): string {

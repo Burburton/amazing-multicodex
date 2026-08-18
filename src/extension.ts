@@ -11,6 +11,7 @@ import { MementoExecutionRepository } from "./adapters/vscode/mementoExecutionRe
 import { MementoTaskRepository } from "./adapters/vscode/mementoTaskRepository";
 import { MementoTaskDependencyRepository } from "./adapters/vscode/mementoTaskDependencyRepository";
 import { MementoProjectRepository } from "./adapters/vscode/mementoProjectRepository";
+import { MementoAgentPlanRepository } from "./adapters/vscode/mementoAgentPlanRepository";
 import { AgentActivityBridge } from "./host/agentActivityBridge";
 import { ApprovalBridge } from "./host/approvalBridge";
 import { RuntimePreflight } from "./host/runtimePreflight";
@@ -58,6 +59,7 @@ import { sortTasksForDisplay, taskPriorityLabel, taskStatusLabel } from "./ui/ta
 import { ProjectId, ProjectProps, ProjectService } from "./modules/projects/public";
 import { ProjectTreeProvider } from "./ui/projectTreeProvider";
 import { ProjectDetailPanelManager } from "./ui/projectDetailPanel";
+import { AgentPlanService, agentPlanTemplate } from "./modules/agents/public";
 
 export function activate(context: vscode.ExtensionContext): void {
   const connectedTasks = new Set<TaskProps["id"]>();
@@ -74,6 +76,8 @@ export function activate(context: vscode.ExtensionContext): void {
     dependencyRepository, repository
   );
   const reassignTask = new ReassignTaskHandler(repository, dependencyRepository, clock);
+  const agentPlanRepository = new MementoAgentPlanRepository(context.workspaceState);
+  const agentPlans = new AgentPlanService(agentPlanRepository, repository, clock);
   const projectTree = new ProjectTreeProvider(projectRepository, repository);
   const ids = new CryptoIdGenerator();
   const codex = new CodexProcessSupervisor(new NodeProcessFactory(), {
@@ -110,6 +114,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const taskDetailQuery = new TaskDetailQuery(lifecycle, dependencies, executions, activity);
   const detailCommands: Readonly<Record<TaskDetailAction, string>> = {
     edit: "amazingMultiCodex.editTask",
+    configureAgents: "amazingMultiCodex.configureTaskAgents",
     queue: "amazingMultiCodex.queueTask",
     start: "amazingMultiCodex.startTask",
     resume: "amazingMultiCodex.resumeTask",
@@ -124,9 +129,9 @@ export function activate(context: vscode.ExtensionContext): void {
   };
   const taskDetails = new TaskDetailPanelManager(
     async taskId => {
-      const detail = await taskDetailQuery.execute(taskId);
-      if (detail.ok) return detail.value;
-      void vscode.window.showErrorMessage(detail.error.message);
+      const [detail, plan] = await Promise.all([taskDetailQuery.execute(taskId), agentPlans.get(taskId)]);
+      if (detail.ok && plan.ok) return { ...detail.value, agentPlan: plan.value };
+      void vscode.window.showErrorMessage(detail.ok ? plan.ok ? "Could not load task details." : plan.error.message : detail.error.message);
       return undefined;
     },
     async (action, task) => { await vscode.commands.executeCommand(detailCommands[action], task); },
@@ -462,6 +467,21 @@ export function activate(context: vscode.ExtensionContext): void {
       refreshViews();
       await taskDetails.refresh(task.id);
       void vscode.window.showInformationMessage(`Moved '${task.title}' to '${target.name}'.`);
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.configureTaskAgents", async (task?: TaskProps) => {
+      task = await selectTask(task, candidate => candidate.status === "draft", "Configure task agents");
+      if (!task) return;
+      const choice = await vscode.window.showQuickPick([
+        { label: "Solo", description: "Implementer", template: "solo" as const },
+        { label: "Plan and deliver", description: "Planner → Implementer", template: "delivery" as const },
+        { label: "Reviewed delivery", description: "Implementer → Reviewer", template: "reviewed" as const },
+        { label: "Full pipeline", description: "Planner → Implementer → Reviewer → Tester", template: "full" as const }
+      ], { title: `Agent pipeline for: ${task.title}`, placeHolder: "Choose an execution pipeline" });
+      if (!choice) return;
+      const configured = await agentPlans.configure(task.id, agentPlanTemplate(choice.template));
+      if (!configured.ok) { void vscode.window.showErrorMessage(configured.error.message); return; }
+      await taskDetails.refresh(task.id);
+      void vscode.window.showInformationMessage(`Configured ${configured.value.stages.length} agent stage(s) for '${task.title}'.`);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.showRuntimeStatus", async () => {
       await projectsReady;
@@ -989,7 +1009,7 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       if (confirmed !== "Delete Task") return;
       const deleted = await new DeleteTaskWorkflow(
-        repository, lifecycle, dependencyRepository, executions, approvalRepository, activityRepository, gitWorkspaces
+        repository, lifecycle, dependencyRepository, executions, approvalRepository, activityRepository, gitWorkspaces, agentPlanRepository
       ).execute(task.id, true);
       if (!deleted.ok) {
         void vscode.window.showErrorMessage(deleted.error.message);
