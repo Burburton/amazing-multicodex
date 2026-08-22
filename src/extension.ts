@@ -13,6 +13,7 @@ import { MementoTaskDependencyRepository } from "./adapters/vscode/mementoTaskDe
 import { MementoProjectRepository } from "./adapters/vscode/mementoProjectRepository";
 import { MementoAgentPlanRepository } from "./adapters/vscode/mementoAgentPlanRepository";
 import { SqliteKeyValueState } from "./adapters/sqlite/sqliteKeyValueState";
+import { SqliteTaskRepository } from "./adapters/sqlite/sqliteTaskRepository";
 import { AgentActivityBridge } from "./host/agentActivityBridge";
 import { ApprovalBridge } from "./host/approvalBridge";
 import { RuntimePreflight } from "./host/runtimePreflight";
@@ -65,9 +66,10 @@ import { ProjectTreeProvider } from "./ui/projectTreeProvider";
 import { ProjectDetailPanelManager } from "./ui/projectDetailPanel";
 import { AgentPlanService, agentPlanTemplate } from "./modules/agents/public";
 import { KeyValueState } from "./shared/ports/keyValueState";
+import { TaskDeletionRepository, TaskRepository } from "./modules/tasks/public";
 import { KeyValueOutboxRepository, OutboxService } from "./modules/outbox/public";
 
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const connectedTasks = new Set<TaskProps["id"]>();
   const validatingTasks = new Set<TaskProps["id"]>();
   let persistentState: KeyValueState = context.workspaceState;
@@ -85,7 +87,17 @@ export function activate(context: vscode.ExtensionContext): void {
   } catch (cause) {
     console.warn("SQLite persistence unavailable; falling back to VS Code workspace state.", cause);
   }
-  const repository = new MementoTaskRepository(persistentState);
+  const legacyRepository = new MementoTaskRepository(context.workspaceState);
+  let repository: TaskRepository & TaskDeletionRepository = new MementoTaskRepository(persistentState);
+  if (sqliteState) {
+    const sqliteRepository = new SqliteTaskRepository(sqliteState.databasePort());
+    const current = await sqliteRepository.list();
+    if (current.ok && current.value.length === 0) {
+      const legacy = await legacyRepository.list();
+      if (legacy.ok) for (const task of legacy.value) await sqliteRepository.save(task, -1);
+    }
+    repository = sqliteRepository;
+  }
   const clock = new SystemClock();
   const ids = new CryptoIdGenerator();
   const outbox = new OutboxService(new KeyValueOutboxRepository(persistentState), clock, ids);
