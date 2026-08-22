@@ -65,6 +65,7 @@ import { ProjectTreeProvider } from "./ui/projectTreeProvider";
 import { ProjectDetailPanelManager } from "./ui/projectDetailPanel";
 import { AgentPlanService, agentPlanTemplate } from "./modules/agents/public";
 import { KeyValueState } from "./shared/ports/keyValueState";
+import { KeyValueOutboxRepository, OutboxService } from "./modules/outbox/public";
 
 export function activate(context: vscode.ExtensionContext): void {
   const connectedTasks = new Set<TaskProps["id"]>();
@@ -86,11 +87,13 @@ export function activate(context: vscode.ExtensionContext): void {
   }
   const repository = new MementoTaskRepository(persistentState);
   const clock = new SystemClock();
+  const ids = new CryptoIdGenerator();
+  const outbox = new OutboxService(new KeyValueOutboxRepository(persistentState), clock, ids);
   const projectRepository = new MementoProjectRepository(persistentState);
   const projectService = new ProjectService(projectRepository, clock, new CryptoIdGenerator());
   const createTask = new CreateTaskHandler(repository, clock, new CryptoIdGenerator());
   const reviseTask = new ReviseTaskHandler(repository, clock);
-  const lifecycle = new TaskLifecycleService(repository, clock);
+  const lifecycle = new TaskLifecycleService(repository, clock, outbox);
   const dependencyRepository = new MementoTaskDependencyRepository(persistentState);
   const dependencies = new TaskDependencyService(
     dependencyRepository, repository
@@ -99,7 +102,6 @@ export function activate(context: vscode.ExtensionContext): void {
   const agentPlanRepository = new MementoAgentPlanRepository(persistentState);
   const agentPlans = new AgentPlanService(agentPlanRepository, repository, clock);
   const projectTree = new ProjectTreeProvider(projectRepository, repository);
-  const ids = new CryptoIdGenerator();
   const codex = new CodexProcessSupervisor(new NodeProcessFactory(), {
     malformedProtocolLine: line => console.warn(
       "MultiCodex ignored malformed Codex output",
