@@ -1,5 +1,5 @@
 import { AgentApprovalDecision, AgentApprovalRequest, AgentRuntimePort } from "../modules/agents/public";
-import { ApprovalProps, ApprovalRisk, ApprovalService, ApprovalStatus } from "../modules/approvals/public";
+import { ApprovalId, ApprovalProps, ApprovalRisk, ApprovalService, ApprovalStatus } from "../modules/approvals/public";
 import { ExecutionRepository } from "../modules/orchestration/public";
 import { TaskLifecycleService } from "../modules/tasks/public";
 
@@ -16,6 +16,7 @@ const silentDiagnostics: ApprovalBridgeDiagnostics = { error: () => undefined };
 
 export class ApprovalBridge {
   private unsubscribe?: () => void;
+  private readonly pendingDecisions = new Map<ApprovalId, (decision: Exclude<ApprovalStatus, "pending">) => void>();
 
   constructor(
     private readonly agents: AgentRuntimePort,
@@ -33,6 +34,15 @@ export class ApprovalBridge {
   stop(): void {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
+    this.pendingDecisions.clear();
+  }
+
+  /** Resolves a request that is currently waiting for an inbox decision. */
+  decidePending(approvalId: ApprovalId, decision: Exclude<ApprovalStatus, "pending">): boolean {
+    const resolve = this.pendingDecisions.get(approvalId);
+    if (!resolve) return false;
+    resolve(decision);
+    return true;
   }
 
   private async handle(request: AgentApprovalRequest): Promise<AgentApprovalDecision> {
@@ -70,7 +80,7 @@ export class ApprovalBridge {
     this.diagnostics.taskChanged?.(execution.value.taskId);
     let decision: Exclude<ApprovalStatus, "pending">;
     try {
-      decision = await this.prompt.decide(captured.value);
+      decision = await this.waitForDecision(captured.value);
     } catch {
       decision = "cancelled";
     }
@@ -90,6 +100,17 @@ export class ApprovalBridge {
     }
     this.diagnostics.taskChanged?.(execution.value.taskId);
     return { decision: decision === "approved" ? "accept" : decision === "declined" ? "decline" : "cancel" };
+  }
+
+  private async waitForDecision(approval: ApprovalProps): Promise<Exclude<ApprovalStatus, "pending">> {
+    let resolvePending!: (decision: Exclude<ApprovalStatus, "pending">) => void;
+    const pending = new Promise<Exclude<ApprovalStatus, "pending">>(resolve => { resolvePending = resolve; });
+    this.pendingDecisions.set(approval.id, resolvePending);
+    try {
+      return await Promise.race([this.prompt.decide(approval), pending]);
+    } finally {
+      this.pendingDecisions.delete(approval.id);
+    }
   }
 }
 

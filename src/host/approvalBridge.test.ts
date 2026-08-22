@@ -76,17 +76,23 @@ test("persists a decision and returns the protocol approval payload", async () =
     executions,
     new ApprovalService(approvalRepository, clock, new FixedIds()),
     new TaskLifecycleService(tasks, clock),
-    { decide: async () => "approved" },
+    { decide: async () => new Promise<"approved">(() => undefined) },
     { error: () => undefined, taskChanged: taskId => changed.push(taskId) }
   );
   bridge.start();
-  const response = await agent.handler?.({
+  const responsePromise = agent.handler?.({
     requestId: "request-1",
     method: "item/commandExecution/requestApproval",
     threadId: "thread-1" as AgentThreadId,
     turnId: "turn-1" as AgentTurnId,
     payload: { command: "npm test" }
   });
+  await new Promise(resolve => setImmediate(resolve));
+  const captured = await approvalRepository.findPendingByTask("task-1" as TaskId);
+  assert.equal(captured.ok && captured.value.length, 1);
+  if (!captured.ok || !captured.value[0]) return;
+  assert.equal(bridge.decidePending(captured.value[0].snapshot().id, "approved"), true);
+  const response = await responsePromise;
   assert.deepEqual(response, { decision: "accept" });
   const found = await tasks.findById("task-1" as TaskId);
   assert.equal(found.ok && found.value?.snapshot().status, "running");

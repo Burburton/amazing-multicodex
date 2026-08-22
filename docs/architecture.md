@@ -594,7 +594,7 @@ derived from reason codes rather than parsing error strings.
 
 Presentation is replaceable and contains no workflow logic.
 
-Target surfaces (the approval inbox remains planned):
+Target surfaces:
 
 - task board/tree: task status, priority, dependencies, active phase;
 - task detail webview: prompt, timeline, changed files, validation, actions;

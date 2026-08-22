@@ -797,7 +797,27 @@ export function activate(context: vscode.ExtensionContext): void {
           approval
         };
       }), { title: `Approval Inbox (${pending.value.length})`, matchOnDetail: true });
-      if (selected) await taskDetails.show(selected.approval.taskId);
+      if (!selected) return;
+      await taskDetails.show(selected.approval.taskId);
+      const decision = await vscode.window.showQuickPick([
+        { label: "Approve", decision: "approved" as const },
+        { label: "Decline", decision: "declined" as const },
+        { label: "Cancel request", decision: "cancelled" as const }
+      ], { title: selected.label, placeHolder: "Choose how to respond to this Codex request" });
+      if (!decision) return;
+      const bridge = approvalBridge;
+      if (!bridge?.decidePending(selected.approval.id, decision.decision)) {
+        void vscode.window.showWarningMessage("This approval is no longer waiting for an active Codex response. Reconnect the task before deciding it.");
+        return;
+      }
+      const recorded = await activity.record({
+        taskId: selected.approval.taskId,
+        kind: "approval",
+        summary: `Approval ${decision.decision}: ${selected.label}`,
+        detail: `Risk: ${selected.approval.risk}`
+      });
+      if (!recorded.ok) console.error("Could not record approval decision activity", recorded.error);
+      void taskDetails.refresh(selected.approval.taskId);
     }),
     vscode.commands.registerCommand("amazingMultiCodex.steerTask", async (task?: TaskProps) => {
       task = await selectTask(
@@ -1326,21 +1346,16 @@ export function activate(context: vscode.ExtensionContext): void {
         });
         if (!requested.ok) console.error("Could not record approval request activity", requested.error);
         void taskDetails.refresh(approval.taskId);
-        const selection = await vscode.window.showWarningMessage(
-          approval.detail ? `${approval.title}\n\n${approval.detail}` : approval.title,
-          { modal: true },
-          "Approve",
-          "Decline"
-        );
-        const decision = selection === "Approve" ? "approved" : selection === "Decline" ? "declined" : "cancelled";
-        const recorded = await activity.record({
-          taskId: approval.taskId,
-          kind: "approval",
-          summary: `Approval ${decision}: ${approval.title}`,
-          detail: `Risk: ${approval.risk}`
+        void vscode.window.showInformationMessage(
+          `Codex is waiting for approval: ${approval.title}`,
+          "Open Approval Inbox"
+        ).then(selection => {
+          if (selection === "Open Approval Inbox") void vscode.commands.executeCommand("amazingMultiCodex.showApprovalInbox");
         });
-        if (!recorded.ok) console.error("Could not record approval decision activity", recorded.error);
-        return decision;
+        // The bridge keeps this request suspended until the inbox resolves it.
+        // Returning a never-settling promise prevents a second modal decision
+        // from racing the durable inbox response.
+        return new Promise<"approved" | "declined" | "cancelled">(() => undefined);
       }
     }, {
       error: (message, cause) => console.error(message, cause),
