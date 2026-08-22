@@ -686,7 +686,7 @@ quota.
 
 ### Slice B: single-task execution
 
-- SQLite repositories and migrations;
+- SQLite migration schema and host state adapter;
 - Codex process supervisor and stable protocol adapter;
 - task creation, one execution, streaming activity, interruption, and recovery;
 - minimal task tree and detail view.
@@ -694,7 +694,7 @@ quota.
 ### Slice C: isolated workspace and approvals
 
 - Git worktree lifecycle;
-- durable approval inbox and responses;
+- durable approval inbox and direct responses;
 - diff projection and safe cleanup;
 - failure repair actions.
 
@@ -710,7 +710,7 @@ quota.
 - dependency graph and cycle detection;
 - concurrency-aware scheduler;
 - retry and cancellation policies;
-- board-level observability.
+- board-level observability and project health metrics.
 
 Each slice must leave the application usable and preserve the dependency rule.
 

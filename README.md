@@ -62,10 +62,11 @@ Task board → scheduler → Codex session adapter → isolated worktree
 
 Next milestones:
 
-1. Add SQLite migrations and a transactional outbox.
-2. Add live Codex thread-state reconciliation after reconnect.
-3. Add guided conflict resolution and explicit retained-branch cleanup workflows.
-4. Add protocol fixture compatibility checks across supported Codex versions.
+1. Add guided conflict resolution UI and expose retained-branch cleanup actions.
+2. Expand protocol fixtures as Codex App Server versions evolve.
+
+SQLite migrations, the transactional outbox, reconnect reconciliation, project
+health metrics, and baseline protocol compatibility fixtures are implemented.
 
 ## Development
 
