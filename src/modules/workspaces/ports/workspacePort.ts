@@ -39,9 +39,16 @@ export interface ReleaseWorkspaceInput {
   readonly force: boolean;
 }
 
+export interface DeleteBranchInput {
+  readonly repositoryRoot: string;
+  readonly branch: string;
+  readonly force: boolean;
+}
+
 export interface WorkspacePort {
   prepare(input: PrepareWorkspaceInput): Promise<Result<WorkspaceRef>>;
   inspect(workspace: WorkspaceRef): Promise<Result<WorkspaceSnapshot>>;
   diff(workspace: WorkspaceRef): Promise<Result<ChangeSet>>;
   release(input: ReleaseWorkspaceInput): Promise<Result<void>>;
+  deleteBranch?(input: DeleteBranchInput): Promise<Result<void>>;
 }

@@ -4,6 +4,7 @@ import { redactAndTruncateSensitiveText } from "../../shared/core/sensitiveData"
 import { CommandResult, CommandRunnerPort } from "../../shared/ports/commandRunner";
 import {
   ChangeSet,
+  DeleteBranchInput,
   PrepareWorkspaceInput,
   ReleaseWorkspaceInput,
   WorkspacePort,
@@ -91,6 +92,12 @@ export class GitWorkspaceAdapter implements WorkspacePort {
     if (input.force) args.push("--force");
     args.push(input.workspace.path);
     const removed = await this.git(input.workspace.repositoryRoot, args);
+    return removed.ok ? ok(undefined) : removed;
+  }
+
+  async deleteBranch(input: DeleteBranchInput): Promise<Result<void>> {
+    if (!input.branch || input.branch.startsWith("-")) return err(gitError("workspace.branch-invalid", "Branch name is invalid."));
+    const removed = await this.git(input.repositoryRoot, ["branch", input.force ? "-D" : "-d", "--", input.branch]);
     return removed.ok ? ok(undefined) : removed;
   }
 

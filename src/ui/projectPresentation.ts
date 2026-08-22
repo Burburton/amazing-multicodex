@@ -1,6 +1,6 @@
 import { TaskProps, TaskStatus } from "../modules/tasks/public";
 
-export type ProjectTaskGroupId = "attention" | "active" | "queued" | "draft" | "completed" | "other";
+export type ProjectTaskGroupId = "metrics" | "attention" | "active" | "queued" | "draft" | "completed" | "other";
 export interface ProjectTaskGroup { readonly id: ProjectTaskGroupId; readonly label: string; readonly tasks: readonly TaskProps[] }
 
 const attention = new Set<TaskStatus>(["blocked", "failed", "readyForReview", "deleting"]);

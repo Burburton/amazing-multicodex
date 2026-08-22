@@ -1,6 +1,7 @@
 export { workspaceBranch } from "./domain/workspaceNaming";
 export type {
   ChangeSet,
+  DeleteBranchInput,
   PrepareWorkspaceInput,
   ReleaseWorkspaceInput,
   WorkspaceId,
@@ -8,4 +9,3 @@ export type {
   WorkspaceRef,
   WorkspaceSnapshot
 } from "./ports/workspacePort";
-
