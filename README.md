@@ -17,6 +17,8 @@ The extension currently provides the core multi-task execution loop:
 - a `MultiCodex Projects` dashboard with task, active-work, attention, and
   completion metrics, intent-based task groups, search/filter controls, recent
   update visibility, and clickable task drill-down;
+- reusable project health metrics for active work, failed stages, running
+  agents, pending approvals, and average completed-stage duration;
 - a hierarchical `Project -> Tasks` Explorer tree with create, start, resume,
   cancel, and activity commands;
 - persistent task agent pipeline configuration with Solo, planning, review,

@@ -60,6 +60,11 @@ and terminal outcome. This history is persisted as part of the execution record
 and projected in task details, making slow or failed pipeline stages visible
 without inspecting raw runtime logs.
 
+Project projections aggregate this history with task state into health metrics:
+active work, attention-required tasks, failed stages, running agents, pending
+approvals, and average completed-stage duration. The metric calculator is kept
+in the presentation boundary so storage and orchestration remain independent.
+
 ## 1. Purpose
 
 Amazing MultiCodex is a VS Code control plane for coordinating multiple Codex
