@@ -12,6 +12,7 @@ import { MementoTaskRepository } from "./adapters/vscode/mementoTaskRepository";
 import { MementoTaskDependencyRepository } from "./adapters/vscode/mementoTaskDependencyRepository";
 import { MementoProjectRepository } from "./adapters/vscode/mementoProjectRepository";
 import { MementoAgentPlanRepository } from "./adapters/vscode/mementoAgentPlanRepository";
+import { SqliteKeyValueState } from "./adapters/sqlite/sqliteKeyValueState";
 import { AgentActivityBridge } from "./host/agentActivityBridge";
 import { ApprovalBridge } from "./host/approvalBridge";
 import { RuntimePreflight } from "./host/runtimePreflight";
@@ -63,23 +64,39 @@ import { ProjectId, ProjectProps, ProjectService } from "./modules/projects/publ
 import { ProjectTreeProvider } from "./ui/projectTreeProvider";
 import { ProjectDetailPanelManager } from "./ui/projectDetailPanel";
 import { AgentPlanService, agentPlanTemplate } from "./modules/agents/public";
+import { KeyValueState } from "./shared/ports/keyValueState";
 
 export function activate(context: vscode.ExtensionContext): void {
   const connectedTasks = new Set<TaskProps["id"]>();
   const validatingTasks = new Set<TaskProps["id"]>();
-  const repository = new MementoTaskRepository(context.workspaceState);
+  let persistentState: KeyValueState = context.workspaceState;
+  let sqliteState: SqliteKeyValueState | undefined;
+  try {
+    sqliteState = new SqliteKeyValueState(pathResolve(context.globalStorageUri.fsPath, "multicodex.sqlite"));
+    sqliteState.importFrom(context.workspaceState, [
+      "amazingMultiCodex.projects.v1", "amazingMultiCodex.dependencies.v1",
+      "amazingMultiCodex.tasks.v2", "amazingMultiCodex.approvals.v1",
+      "amazingMultiCodex.executions.v1", "amazingMultiCodex.agentPlans.v1",
+      "amazingMultiCodex.activity.v1"
+    ]);
+    persistentState = sqliteState;
+    context.subscriptions.push({ dispose: () => sqliteState?.close() });
+  } catch (cause) {
+    console.warn("SQLite persistence unavailable; falling back to VS Code workspace state.", cause);
+  }
+  const repository = new MementoTaskRepository(persistentState);
   const clock = new SystemClock();
-  const projectRepository = new MementoProjectRepository(context.workspaceState);
+  const projectRepository = new MementoProjectRepository(persistentState);
   const projectService = new ProjectService(projectRepository, clock, new CryptoIdGenerator());
   const createTask = new CreateTaskHandler(repository, clock, new CryptoIdGenerator());
   const reviseTask = new ReviseTaskHandler(repository, clock);
   const lifecycle = new TaskLifecycleService(repository, clock);
-  const dependencyRepository = new MementoTaskDependencyRepository(context.workspaceState);
+  const dependencyRepository = new MementoTaskDependencyRepository(persistentState);
   const dependencies = new TaskDependencyService(
     dependencyRepository, repository
   );
   const reassignTask = new ReassignTaskHandler(repository, dependencyRepository, clock);
-  const agentPlanRepository = new MementoAgentPlanRepository(context.workspaceState);
+  const agentPlanRepository = new MementoAgentPlanRepository(persistentState);
   const agentPlans = new AgentPlanService(agentPlanRepository, repository, clock);
   const projectTree = new ProjectTreeProvider(projectRepository, repository);
   const ids = new CryptoIdGenerator();
@@ -101,16 +118,16 @@ export function activate(context: vscode.ExtensionContext): void {
       console.error("Codex App Server error", error);
     }
   });
-  const executions = new MementoExecutionRepository(context.workspaceState);
+  const executions = new MementoExecutionRepository(persistentState);
   const commandRunner = new NodeCommandRunner();
   const runtimePreflight = new RuntimePreflight(commandRunner);
   const gitWorkspaces = new GitWorkspaceAdapter(commandRunner);
   const capacity = new ExecutionCapacityGate();
-  const activityRepository = new MementoActivityRepository(context.workspaceState);
+  const activityRepository = new MementoActivityRepository(persistentState);
   const activity = new ActivityService(
     activityRepository, clock, ids
   );
-  const approvalRepository = new MementoApprovalRepository(context.workspaceState);
+  const approvalRepository = new MementoApprovalRepository(persistentState);
   const approvals = new ApprovalService(
     approvalRepository, clock, ids
   );

@@ -4,6 +4,9 @@ export const sqliteMigrations: readonly SqliteMigration[] = [{
   version: 1,
   name: "core-control-plane",
   sql: `
+CREATE TABLE IF NOT EXISTS kv_state (
+  key TEXT PRIMARY KEY, value_json TEXT NOT NULL, updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, repository_root TEXT NOT NULL UNIQUE,
   base_ref TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
