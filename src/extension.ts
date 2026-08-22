@@ -14,6 +14,9 @@ import { MementoProjectRepository } from "./adapters/vscode/mementoProjectReposi
 import { MementoAgentPlanRepository } from "./adapters/vscode/mementoAgentPlanRepository";
 import { SqliteKeyValueState } from "./adapters/sqlite/sqliteKeyValueState";
 import { SqliteTaskRepository } from "./adapters/sqlite/sqliteTaskRepository";
+import { SqliteExecutionRepository } from "./adapters/sqlite/sqliteExecutionRepository";
+import { SqliteApprovalRepository } from "./adapters/sqlite/sqliteApprovalRepository";
+import { SqliteActivityRepository } from "./adapters/sqlite/sqliteActivityRepository";
 import { AgentActivityBridge } from "./host/agentActivityBridge";
 import { ApprovalBridge } from "./host/approvalBridge";
 import { RuntimePreflight } from "./host/runtimePreflight";
@@ -67,6 +70,9 @@ import { ProjectDetailPanelManager } from "./ui/projectDetailPanel";
 import { AgentPlanService, agentPlanTemplate } from "./modules/agents/public";
 import { KeyValueState } from "./shared/ports/keyValueState";
 import { TaskDeletionRepository, TaskRepository } from "./modules/tasks/public";
+import { ActivityDeletionRepository, ActivityRepository } from "./modules/activity/public";
+import { ApprovalDeletionRepository, ApprovalRepository } from "./modules/approvals/public";
+import { ExecutionDeletionRepository, ExecutionRepository } from "./modules/orchestration/public";
 import { KeyValueOutboxRepository, OutboxService } from "./modules/outbox/public";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -132,16 +138,51 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       console.error("Codex App Server error", error);
     }
   });
-  const executions = new MementoExecutionRepository(persistentState);
+  const legacyExecutions = new MementoExecutionRepository(context.workspaceState);
+  let executions: ExecutionRepository & ExecutionDeletionRepository = new MementoExecutionRepository(persistentState);
+  const legacyActivityRepository = new MementoActivityRepository(context.workspaceState);
+  let activityRepository: ActivityRepository & ActivityDeletionRepository = new MementoActivityRepository(persistentState);
+  const legacyApprovalRepository = new MementoApprovalRepository(context.workspaceState);
+  let approvalRepository: ApprovalRepository & ApprovalDeletionRepository = new MementoApprovalRepository(persistentState);
+  if (sqliteState) {
+    const sqliteExecutions = new SqliteExecutionRepository(sqliteState.databasePort());
+    const sqliteActivities = new SqliteActivityRepository(sqliteState.databasePort());
+    const sqliteApprovals = new SqliteApprovalRepository(sqliteState.databasePort());
+    const taskList = await repository.list();
+    if (taskList.ok) {
+      const active = await sqliteExecutions.listActive();
+      if (active.ok && active.value.length === 0) {
+        for (const task of taskList.value) {
+          const legacy = await legacyExecutions.findLatestByTask(task.snapshot().id);
+          if (legacy.ok && legacy.value) await sqliteExecutions.save(legacy.value, -1);
+        }
+      }
+      const pending = await sqliteApprovals.listPending();
+      if (pending.ok && pending.value.length === 0) {
+        for (const task of taskList.value) {
+          const legacy = await legacyApprovalRepository.findPendingByTask(task.snapshot().id);
+          if (legacy.ok) for (const approval of legacy.value) await sqliteApprovals.save(approval, -1);
+        }
+      }
+      const activityProbe = await sqliteActivities.listByTask(taskList.value[0]?.snapshot().id ?? "__none__" as never, 1);
+      if (activityProbe.ok && activityProbe.value.length === 0) {
+        for (const task of taskList.value) {
+          const legacy = await legacyActivityRepository.listByTask(task.snapshot().id, 500);
+          if (legacy.ok) for (const record of [...legacy.value].reverse()) await sqliteActivities.append(record);
+        }
+      }
+    }
+    executions = sqliteExecutions;
+    activityRepository = sqliteActivities;
+    approvalRepository = sqliteApprovals;
+  }
   const commandRunner = new NodeCommandRunner();
   const runtimePreflight = new RuntimePreflight(commandRunner);
   const gitWorkspaces = new GitWorkspaceAdapter(commandRunner);
   const capacity = new ExecutionCapacityGate();
-  const activityRepository = new MementoActivityRepository(persistentState);
   const activity = new ActivityService(
     activityRepository, clock, ids
   );
-  const approvalRepository = new MementoApprovalRepository(persistentState);
   const approvals = new ApprovalService(
     approvalRepository, clock, ids, outbox
   );
