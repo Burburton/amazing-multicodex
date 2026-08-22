@@ -35,6 +35,24 @@ test("captures and decides an approval through repository ports", async () => {
   assert.equal(pending.ok && pending.value.length, 0);
 });
 
+test("lists pending approvals across tasks for the approval inbox", async () => {
+  const repository = new InMemoryApprovalRepository();
+  const service = new ApprovalService(repository, new FixedClock(), new FixedIds());
+  const captured = await service.capture({
+    taskId: "task-1" as TaskId,
+    request: { requestId: "runtime-1", method: "approval", payload: {} },
+    risk: "execute",
+    title: "Run a command"
+  });
+  assert.equal(captured.ok, true);
+  const pending = await service.listPending();
+  assert.equal(pending.ok, true);
+  if (!pending.ok) return;
+  assert.equal(pending.value.length, 1);
+  assert.equal(pending.value[0]?.taskId, "task-1");
+  assert.equal(pending.value[0]?.status, "pending");
+});
+
 test("redacts nested approval secrets before persistence", async () => {
   const repository = new InMemoryApprovalRepository();
   const service = new ApprovalService(repository, new FixedClock(), new FixedIds());

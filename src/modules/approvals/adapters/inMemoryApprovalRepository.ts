@@ -11,6 +11,12 @@ export class InMemoryApprovalRepository implements ApprovalRepository {
     return ok(record ? Approval.restore(record) : undefined);
   }
 
+  async listPending(): Promise<Result<readonly Approval[]>> {
+    return ok([...this.records.values()]
+      .filter(record => record.status === "pending")
+      .map(record => Approval.restore(record)));
+  }
+
   async findPendingByTask(taskId: TaskId): Promise<Result<readonly Approval[]>> {
     return ok([...this.records.values()]
       .filter(record => record.taskId === taskId && record.status === "pending")

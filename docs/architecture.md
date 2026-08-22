@@ -23,8 +23,12 @@ actionable readiness report, and a live-refreshing detail/activity panel.
 External protocol lines, process output, persisted records, approval payloads,
 and user-visible vendor errors have explicit size and redaction boundaries.
 Approval requests and decisions are projected into the task activity timeline;
-a separate approval inbox, transactional persistence/outbox, and live Codex
-thread-state reconciliation remain future increments.
+transactional persistence/outbox remains a future increment.
+
+The approval inbox projection is now available as a cross-project command. It
+reads pending approvals through the approvals port and routes each selection
+to the owning task detail, keeping approval state and runtime response handling
+inside the existing bridge.
 
 Per-task agent plans are persisted as ordered, bounded role pipelines and shown
 in task details. Each stage runs in an independent Codex session against the

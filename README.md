@@ -156,6 +156,10 @@ After a Codex connection is established, MultiCodex also queries each persisted
 thread with `thread/read`. If a turn completed while VS Code was disconnected,
 the stored turn result and handoff are replayed through the normal pipeline, so
 the task can advance to validation or its next role without manual intervention.
+
+Use `MultiCodex: Show Approval Inbox` to review persisted approval requests
+across all projects. Select an item to open the owning task and inspect its
+context, risk, and activity while the active Codex request remains pending.
 5. Run validation, inspect the complete worktree diff, and integrate it with a
    merge or squash after review.
 6. Release the isolated worktree after the task is completed or cancelled.

@@ -769,6 +769,36 @@ export function activate(context: vscode.ExtensionContext): void {
         detail: record.detail
       })), { title: `Activity: ${task.title}`, matchOnDetail: true });
     }),
+    vscode.commands.registerCommand("amazingMultiCodex.showApprovalInbox", async () => {
+      const pending = await approvals.listPending();
+      if (!pending.ok) {
+        void vscode.window.showErrorMessage(pending.error.message);
+        return;
+      }
+      if (pending.value.length === 0) {
+        void vscode.window.showInformationMessage("Approval inbox is empty.");
+        return;
+      }
+      const tasks = await repository.list();
+      if (!tasks.ok) {
+        void vscode.window.showErrorMessage(tasks.error.message);
+        return;
+      }
+      const byTask = new Map(tasks.value.map(item => {
+        const snapshot = item.snapshot();
+        return [snapshot.id, snapshot] as const;
+      }));
+      const selected = await vscode.window.showQuickPick(pending.value.map(approval => {
+        const task = byTask.get(approval.taskId);
+        return {
+          label: approval.title,
+          description: `${task?.title ?? approval.taskId} · ${approval.risk} · ${approval.createdAt.toLocaleString()}`,
+          detail: approval.detail,
+          approval
+        };
+      }), { title: `Approval Inbox (${pending.value.length})`, matchOnDetail: true });
+      if (selected) await taskDetails.show(selected.approval.taskId);
+    }),
     vscode.commands.registerCommand("amazingMultiCodex.steerTask", async (task?: TaskProps) => {
       task = await selectTask(
         task,

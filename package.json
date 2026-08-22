@@ -54,6 +54,7 @@
     "onCommand:amazingMultiCodex.reconnectRunningTasks",
     "onCommand:amazingMultiCodex.steerTask",
     "onCommand:amazingMultiCodex.showActivity",
+    "onCommand:amazingMultiCodex.showApprovalInbox",
     "onCommand:amazingMultiCodex.showTaskDetails",
     "onCommand:amazingMultiCodex.cancelTask",
     "onCommand:amazingMultiCodex.validateTask",
@@ -274,6 +275,11 @@
         "command": "amazingMultiCodex.showActivity",
         "title": "MultiCodex: Show Task Activity",
         "icon": "$(history)"
+      },
+      {
+        "command": "amazingMultiCodex.showApprovalInbox",
+        "title": "MultiCodex: Show Approval Inbox",
+        "icon": "$(verified)"
       },
       {
         "command": "amazingMultiCodex.showTaskDetails",

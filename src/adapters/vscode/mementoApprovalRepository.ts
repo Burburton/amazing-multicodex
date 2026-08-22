@@ -28,6 +28,12 @@ export class MementoApprovalRepository implements ApprovalRepository {
     return ok(record ? Approval.restore(toProps(record)) : undefined);
   }
 
+  async listPending(): Promise<Result<readonly Approval[]>> {
+    const records = this.records();
+    if (!records.ok) return records;
+    return ok(records.value.filter(item => item.status === "pending").map(item => Approval.restore(toProps(item))));
+  }
+
   async findPendingByTask(taskId: TaskId): Promise<Result<readonly Approval[]>> {
     const records = this.records();
     if (!records.ok) return records;

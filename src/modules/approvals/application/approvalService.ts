@@ -28,6 +28,12 @@ export class ApprovalService {
     private readonly ids: IdGenerator
   ) {}
 
+  async listPending(): Promise<Result<readonly ApprovalProps[]>> {
+    const pending = await this.repository.listPending();
+    if (!pending.ok) return pending;
+    return { ok: true, value: pending.value.map(approval => approval.snapshot()) };
+  }
+
   async capture(command: CaptureApprovalCommand): Promise<Result<ApprovalProps>> {
     const created = Approval.create({
       id: this.ids.next() as ApprovalId,

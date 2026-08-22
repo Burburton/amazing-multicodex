@@ -4,6 +4,7 @@ import { Approval, ApprovalId } from "../domain/approval";
 
 export interface ApprovalRepository {
   findById(id: ApprovalId): Promise<Result<Approval | undefined>>;
+  listPending(): Promise<Result<readonly Approval[]>>;
   findPendingByTask(taskId: TaskId): Promise<Result<readonly Approval[]>>;
   save(approval: Approval, expectedVersion: number): Promise<Result<void>>;
 }
