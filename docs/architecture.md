@@ -544,6 +544,9 @@ On recovery:
 - a known active turn is resumed or observed;
 - a persisted pending-stage checkpoint starts its target role with the saved
   handoff before any completed source turn is considered resumable;
+- multiple resumable executions may be reconnected through one bounded batch
+  workflow; each task remains isolated by its persisted worktree and a single
+  task failure does not abort the batch;
 - an existing thread without an active turn becomes resumable;
 - a missing worktree blocks its task with a repair action;
 - a runtime outage sets runtime health degraded, not every task failed;

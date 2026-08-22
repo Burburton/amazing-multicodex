@@ -51,6 +51,7 @@
     "onCommand:amazingMultiCodex.dispatchQueue",
     "onCommand:amazingMultiCodex.startTask",
     "onCommand:amazingMultiCodex.resumeTask",
+    "onCommand:amazingMultiCodex.reconnectRunningTasks",
     "onCommand:amazingMultiCodex.steerTask",
     "onCommand:amazingMultiCodex.showActivity",
     "onCommand:amazingMultiCodex.showTaskDetails",
@@ -258,6 +259,11 @@
         "command": "amazingMultiCodex.resumeTask",
         "title": "MultiCodex: Reconnect / Resume Task",
         "icon": "$(debug-continue)"
+      },
+      {
+        "command": "amazingMultiCodex.reconnectRunningTasks",
+        "title": "MultiCodex: Reconnect All Running Tasks",
+        "icon": "$(run-all)"
       },
       {
         "command": "amazingMultiCodex.steerTask",

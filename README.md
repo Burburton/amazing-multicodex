@@ -137,6 +137,11 @@ approval requests appear as modal VS Code prompts. While a connected task is
 running, use `Send Follow-up` to clarify priorities without starting another turn.
 After reloading VS Code or losing the Codex connection, use `Reconnect / Resume`
 on a task that still shows as running.
+
+When several projects have running tasks, use `MultiCodex: Reconnect All Running
+Tasks` from the Command Palette. It opens one Codex connection, resumes each
+disconnected task in its own persisted worktree, skips tasks already connected,
+and reports individual failures without stopping the rest.
 5. Run validation, inspect the complete worktree diff, and integrate it with a
    merge or squash after review.
 6. Release the isolated worktree after the task is completed or cancelled.

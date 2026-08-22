@@ -29,6 +29,7 @@ import {
   ExecutionCapacityGate,
   ReleaseTaskWorkspaceWorkflow,
   ReconcileExecutionsWorkflow,
+  ReconnectRunningTasksWorkflow,
   ResumeTaskWorkflow,
   RetryAgentStageWorkflow,
   SchedulerPolicy,
@@ -653,6 +654,39 @@ export function activate(context: vscode.ExtensionContext): void {
         connectedTasks.delete(task.id);
         const message = cause instanceof Error ? cause.message : "Unknown resume error.";
         void vscode.window.showErrorMessage(`Could not resume MultiCodex task: ${message}`);
+      }
+    }),
+    vscode.commands.registerCommand("amazingMultiCodex.reconnectRunningTasks", async () => {
+      try {
+        const projects = await projectService.list();
+        if (!projects.ok || projects.value.length === 0) {
+          void vscode.window.showErrorMessage(projects.ok ? "Add a project before reconnecting tasks." : projects.error.message);
+          return;
+        }
+        const settings = readSettings();
+        if (!settings.ok) { void vscode.window.showErrorMessage(settings.error.message); return; }
+        const agent = await codex.start({
+          cwd: projects.value[0].repositoryRoot,
+          executable: settings.value.codexExecutable,
+          requestTimeoutMs: settings.value.requestTimeoutMs
+        });
+        const alreadyConnected = boundAgent === agent ? new Set(connectedTasks) : new Set<TaskProps["id"]>();
+        bindAgent(agent, settings.value.maxActivityCharacters);
+        const report = await new ReconnectRunningTasksWorkflow(
+          repository, lifecycle, agent, executions, clock
+        ).execute(alreadyConnected);
+        if (!report.ok) { void vscode.window.showErrorMessage(report.error.message); return; }
+        for (const taskId of report.value.resumed) connectedTasks.add(taskId);
+        refreshViews();
+        const failed = report.value.failed.length;
+        const details = report.value.failed.slice(0, 3).map(item => `${item.taskId}: ${item.message}`).join("; ");
+        void vscode.window.showInformationMessage(
+          `Reconnected ${report.value.resumed.length} task(s); skipped ${report.value.skipped.length} already connected.`
+          + (failed ? ` Failed ${failed}: ${details}${failed > 3 ? "; and more" : ""}` : "")
+        );
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : "Unknown reconnect error.";
+        void vscode.window.showErrorMessage(`Could not reconnect running tasks: ${message}`);
       }
     }),
     vscode.commands.registerCommand("amazingMultiCodex.retryAgentStage", async (task?: TaskProps) => {
