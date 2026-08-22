@@ -1,5 +1,5 @@
 import { Clock } from "../../../shared/core/clock";
-import { AgentPlanRepository, AgentRuntimeEvent, AgentRuntimePort } from "../../agents/public";
+import { AgentPlanRepository, AgentRuntimeEvent, AgentRuntimePort, AgentRuntimeSnapshot } from "../../agents/public";
 import { TaskLifecycleService } from "../../tasks/public";
 import { ExecutionRepository, PendingAgentStage, TaskExecutionRecord } from "../ports/executionRepository";
 import { pendingStagePrompt } from "./agentStagePrompt";
@@ -34,6 +34,19 @@ export class AgentEventCoordinator {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
     this.handoffs.clear();
+  }
+
+  async reconcile(snapshot: AgentRuntimeSnapshot): Promise<void> {
+    if (!["completed", "interrupted", "failed"].includes(snapshot.turnStatus)) return;
+    const key = `${snapshot.threadId}\0${snapshot.turnId}`;
+    if (snapshot.handoff) this.handoffs.set(key, snapshot.handoff);
+    await this.handle({
+      type: "turnCompleted",
+      threadId: snapshot.threadId,
+      turnId: snapshot.turnId,
+      status: snapshot.turnStatus,
+      error: snapshot.error
+    });
   }
 
   private async handle(event: AgentRuntimeEvent): Promise<void> {

@@ -9,6 +9,8 @@ export { ResumeTaskWorkflow } from "./application/resumeTaskWorkflow";
 export { RetryAgentStageWorkflow } from "./application/retryAgentStageWorkflow";
 export { ReconnectRunningTasksWorkflow } from "./application/reconnectRunningTasksWorkflow";
 export type { ReconnectRunningTasksReport } from "./application/reconnectRunningTasksWorkflow";
+export { ReconcileRuntimeWorkflow } from "./application/reconcileRuntimeWorkflow";
+export type { RuntimeReconciliationReport } from "./application/reconcileRuntimeWorkflow";
 export type { ResumeTaskWorkflowCommand } from "./application/resumeTaskWorkflow";
 export { SteerTaskWorkflow } from "./application/steerTaskWorkflow";
 export type { SteerTaskWorkflowCommand } from "./application/steerTaskWorkflow";

@@ -29,6 +29,7 @@ import {
   ExecutionCapacityGate,
   ReleaseTaskWorkspaceWorkflow,
   ReconcileExecutionsWorkflow,
+  ReconcileRuntimeWorkflow,
   ReconnectRunningTasksWorkflow,
   ResumeTaskWorkflow,
   RetryAgentStageWorkflow,
@@ -159,6 +160,7 @@ export function activate(context: vscode.ExtensionContext): void {
   let activityBridge: AgentActivityBridge | undefined;
   let approvalBridge: ApprovalBridge | undefined;
   let boundAgent: Awaited<ReturnType<CodexProcessSupervisor["start"]>> | undefined;
+  let runtimeReconciliation: Promise<void> = Promise.resolve();
   const dispatcher = new CoalescingAsyncRunner(
     dispatchQueueOnce,
     (currentNotify, incomingNotify) => currentNotify || incomingNotify
@@ -585,7 +587,7 @@ export function activate(context: vscode.ExtensionContext): void {
             executable: settings.value.codexExecutable,
             requestTimeoutMs: settings.value.requestTimeoutMs
           });
-          bindAgent(agent, settings.value.maxActivityCharacters);
+          await bindAgent(agent, settings.value.maxActivityCharacters);
           const workflow = new StartTaskWorkflow(
             lifecycle,
             gitWorkspaces,
@@ -640,7 +642,7 @@ export function activate(context: vscode.ExtensionContext): void {
           executable: settings.value.codexExecutable,
           requestTimeoutMs: settings.value.requestTimeoutMs
         });
-        bindAgent(agent, settings.value.maxActivityCharacters);
+        await bindAgent(agent, settings.value.maxActivityCharacters);
         connectedTasks.add(task.id);
         const resumed = await new ResumeTaskWorkflow(lifecycle, agent, executions, clock)
           .execute({ taskId: task.id });
@@ -671,7 +673,7 @@ export function activate(context: vscode.ExtensionContext): void {
           requestTimeoutMs: settings.value.requestTimeoutMs
         });
         const alreadyConnected = boundAgent === agent ? new Set(connectedTasks) : new Set<TaskProps["id"]>();
-        bindAgent(agent, settings.value.maxActivityCharacters);
+        await bindAgent(agent, settings.value.maxActivityCharacters);
         const report = await new ReconnectRunningTasksWorkflow(
           repository, lifecycle, agent, executions, clock
         ).execute(alreadyConnected);
@@ -698,7 +700,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!settings.ok) { void vscode.window.showErrorMessage(settings.error.message); return; }
       try {
         const agent = await codex.start({ cwd: project.repositoryRoot, executable: settings.value.codexExecutable, requestTimeoutMs: settings.value.requestTimeoutMs });
-        bindAgent(agent, settings.value.maxActivityCharacters);
+        await bindAgent(agent, settings.value.maxActivityCharacters);
         const retried = await new RetryAgentStageWorkflow(lifecycle, agent, executions, agentPlanRepository, clock).execute(task.id);
         if (!retried.ok) { void vscode.window.showErrorMessage(retried.error.message); return; }
         connectedTasks.add(task.id);
@@ -1123,7 +1125,7 @@ export function activate(context: vscode.ExtensionContext): void {
         executable: settings.value.codexExecutable,
         requestTimeoutMs: settings.value.requestTimeoutMs
       });
-      bindAgent(agent, settings.value.maxActivityCharacters);
+      await bindAgent(agent, settings.value.maxActivityCharacters);
       const starter = new StartTaskWorkflow(
         lifecycle, gitWorkspaces, agent,
         executions, clock, ids, capacity, dependencies, agentPlanRepository
@@ -1196,11 +1198,11 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }
 
-  function bindAgent(
+  async function bindAgent(
     agent: Awaited<ReturnType<CodexProcessSupervisor["start"]>>,
     maxActivityCharacters: number
-  ): void {
-    if (boundAgent === agent) return;
+  ): Promise<void> {
+    if (boundAgent === agent) return runtimeReconciliation;
     connectedTasks.clear();
     coordinator?.stop();
     coordinator = new AgentEventCoordinator(agent, executions, lifecycle, clock, {
@@ -1224,6 +1226,23 @@ export function activate(context: vscode.ExtensionContext): void {
     approvalBridge = createApprovalBridge(agent);
     approvalBridge.start();
     boundAgent = agent;
+    runtimeReconciliation = reconcileRuntime(agent);
+    await runtimeReconciliation;
+  }
+
+  async function reconcileRuntime(agent: Awaited<ReturnType<CodexProcessSupervisor["start"]>>): Promise<void> {
+    const report = await new ReconcileRuntimeWorkflow(executions, agent, coordinator!).execute();
+    if (!report.ok) {
+      console.error("Could not reconcile Codex runtime state", report.error);
+      return;
+    }
+    for (const taskId of report.value.active) connectedTasks.add(taskId);
+    for (const taskId of report.value.completed) connectedTasks.delete(taskId);
+    for (const item of report.value.failed) connectedTasks.delete(item.taskId);
+    if (report.value.unavailable.length > 0) {
+      console.warn("Some persisted Codex turns could not be reconciled", report.value.unavailable);
+    }
+    refreshViews();
   }
 
   function createApprovalBridge(agent: Awaited<ReturnType<CodexProcessSupervisor["start"]>>): ApprovalBridge {

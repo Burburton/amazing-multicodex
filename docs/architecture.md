@@ -547,6 +547,10 @@ On recovery:
 - multiple resumable executions may be reconnected through one bounded batch
   workflow; each task remains isolated by its persisted worktree and a single
   task failure does not abort the batch;
+- after a runtime connection is available, `thread/read` with `includeTurns`
+  reconciles persisted thread and turn status. Terminal turns are replayed
+  through the coordinator, including bounded assistant handoff text, so missed
+  notifications do not strand a task in `running` state;
 - an existing thread without an active turn becomes resumable;
 - a missing worktree blocks its task with a repair action;
 - a runtime outage sets runtime health degraded, not every task failed;

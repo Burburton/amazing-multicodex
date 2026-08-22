@@ -1,4 +1,5 @@
 import { Brand } from "../../../shared/core/brand";
+import { Result } from "../../../shared/core/result";
 
 export type ExecutionId = Brand<string, "ExecutionId">;
 export type AgentThreadId = Brand<string, "AgentThreadId">;
@@ -20,6 +21,17 @@ export interface AgentExecutionRef {
   readonly executionId: ExecutionId;
   readonly threadId: AgentThreadId;
   readonly turnId: AgentTurnId;
+}
+
+export type AgentRuntimeTurnStatus = "inProgress" | "completed" | "interrupted" | "failed" | "unknown";
+
+export interface AgentRuntimeSnapshot {
+  readonly threadId: AgentThreadId;
+  readonly turnId: AgentTurnId;
+  readonly threadStatus: "active" | "idle" | "systemError" | "notLoaded" | "unknown";
+  readonly turnStatus: AgentRuntimeTurnStatus;
+  readonly handoff?: string;
+  readonly error?: string;
 }
 
 export type AgentRuntimeHealth =
@@ -69,10 +81,10 @@ export interface AgentRuntimePort {
   initialize(): Promise<void>;
   start(input: StartExecutionInput): Promise<AgentExecutionRef>;
   resume(input: ResumeExecutionInput): Promise<AgentExecutionRef>;
+  readonly inspect?: (execution: AgentExecutionRef) => Promise<Result<AgentRuntimeSnapshot>>;
   steer(execution: AgentExecutionRef, prompt: string): Promise<void>;
   interrupt(execution: AgentExecutionRef): Promise<void>;
   subscribe(listener: AgentEventListener): () => void;
   handleApprovals(handler: AgentApprovalHandler): () => void;
   health(): AgentRuntimeHealth;
 }
-

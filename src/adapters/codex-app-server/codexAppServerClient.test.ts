@@ -66,6 +66,35 @@ test("starts a thread followed by a turn", async () => {
   });
 });
 
+test("inspects persisted thread and turn state for runtime reconciliation", async () => {
+  const { client, peer, transport } = await initializedClient();
+  const inspected = client.inspect({
+    executionId: "execution-1", threadId: "thread-1", turnId: "turn-1"
+  } as never);
+  const request = latestRequest(transport);
+  assert.equal(request.method, "thread/read");
+  const message = transport.messages.at(-1);
+  assert.ok(message && "id" in message);
+  peer.receive({ id: message.id, result: {
+    thread: {
+      id: "thread-1",
+      status: { type: "idle" },
+      turns: [{
+        id: "turn-1",
+        status: "completed",
+        items: [{ type: "agentMessage", content: [{ type: "text", text: "Finished implementation." }] }]
+      }]
+    }
+  } });
+  const snapshot = await inspected;
+  assert.equal(snapshot.ok, true);
+  if (!snapshot.ok) return;
+  assert.deepEqual(snapshot.value, {
+    threadId: "thread-1", turnId: "turn-1", threadStatus: "idle", turnStatus: "completed",
+    handoff: "Finished implementation."
+  });
+});
+
 test("normalizes streamed notifications", async () => {
   const { client, peer } = await initializedClient();
   const events: AgentRuntimeEvent[] = [];

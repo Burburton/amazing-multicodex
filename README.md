@@ -142,6 +142,11 @@ When several projects have running tasks, use `MultiCodex: Reconnect All Running
 Tasks` from the Command Palette. It opens one Codex connection, resumes each
 disconnected task in its own persisted worktree, skips tasks already connected,
 and reports individual failures without stopping the rest.
+
+After a Codex connection is established, MultiCodex also queries each persisted
+thread with `thread/read`. If a turn completed while VS Code was disconnected,
+the stored turn result and handoff are replayed through the normal pipeline, so
+the task can advance to validation or its next role without manual intervention.
 5. Run validation, inspect the complete worktree diff, and integrate it with a
    merge or squash after review.
 6. Release the isolated worktree after the task is completed or cancelled.

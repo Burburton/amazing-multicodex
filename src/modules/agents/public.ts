@@ -4,6 +4,8 @@ export type {
   AgentApprovalRequest,
   AgentEventListener,
   AgentExecutionRef,
+  AgentRuntimeSnapshot,
+  AgentRuntimeTurnStatus,
   AgentRuntimeEvent,
   AgentRuntimeHealth,
   AgentRuntimePort,

@@ -6,6 +6,7 @@ import {
   AgentRuntimeEvent,
   AgentRuntimeHealth,
   AgentRuntimePort,
+  AgentRuntimeSnapshot,
   AgentThreadId,
   AgentTurnId,
   ExecutionId,
@@ -14,6 +15,7 @@ import {
 } from "../../modules/agents/public";
 import { JsonRpcPeer } from "./jsonRpc";
 import { AppError } from "../../shared/core/result";
+import { Result, err, ok } from "../../shared/core/result";
 
 interface InitializeResult {
   readonly userAgent?: string;
@@ -26,6 +28,8 @@ interface ThreadResult {
 interface TurnResult {
   readonly turn: { readonly id: string };
 }
+
+interface ThreadReadResult { readonly thread: Record<string, unknown>; }
 
 interface NotificationEnvelope {
   readonly threadId?: unknown;
@@ -84,6 +88,37 @@ export class CodexAppServerClient implements AgentRuntimePort {
     this.requireInitialized();
     threadResultOf(await this.peer.request<unknown>("thread/resume", { threadId: input.threadId }));
     return this.startTurn(input.threadId, input.prompt, input.cwd);
+  }
+
+  async inspect(execution: AgentExecutionRef): Promise<Result<AgentRuntimeSnapshot>> {
+    try {
+      this.requireInitialized();
+      const response = await this.peer.request<unknown>("thread/read", {
+        threadId: execution.threadId,
+        includeTurns: true
+      });
+      const thread = threadReadResultOf(response).thread;
+      const turn = Array.isArray(thread.turns)
+        ? (thread.turns as Array<Record<string, unknown>>).find(item => item.id === execution.turnId)
+        : undefined;
+      const error = turnErrorOf(turn?.error);
+      return ok({
+        threadId: execution.threadId,
+        turnId: execution.turnId,
+        threadStatus: threadStatusOf(thread.status),
+        turnStatus: turnStatusOf(turn?.status),
+        handoff: handoffOf(turn),
+        ...(error ? { error } : {})
+      });
+    } catch (cause) {
+      return err({
+        code: "codex.inspect-failed",
+        category: "unavailable",
+        message: "Codex thread state could not be inspected.",
+        retryable: true,
+        cause
+      });
+    }
   }
 
   async steer(execution: AgentExecutionRef, prompt: string): Promise<void> {
@@ -249,6 +284,46 @@ function turnResultOf(value: unknown): TurnResult {
   const id = nestedId(value, "turn");
   if (!id) throw invalidResponse("turn");
   return { turn: { id } };
+}
+
+function threadReadResultOf(value: unknown): ThreadReadResult {
+  if (!value || typeof value !== "object") throw invalidResponse("thread/read");
+  const thread = (value as Record<string, unknown>).thread;
+  if (!thread || typeof thread !== "object") throw invalidResponse("thread/read");
+  const id = boundedString((thread as Record<string, unknown>).id, MAX_RUNTIME_ID_CHARACTERS);
+  if (!id) throw invalidResponse("thread/read");
+  return { thread: thread as Record<string, unknown> };
+}
+
+function threadStatusOf(value: unknown): AgentRuntimeSnapshot["threadStatus"] {
+  const type = value && typeof value === "object" ? (value as Record<string, unknown>).type : undefined;
+  return type === "active" || type === "idle" || type === "systemError" || type === "notLoaded" ? type : "unknown";
+}
+
+function turnStatusOf(value: unknown): AgentRuntimeSnapshot["turnStatus"] {
+  return value === "inProgress" || value === "completed" || value === "interrupted" || value === "failed" ? value : "unknown";
+}
+
+function turnErrorOf(value: unknown): string | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const message = (value as Record<string, unknown>).message;
+  return typeof message === "string" ? message.slice(-2_000) : undefined;
+}
+
+function handoffOf(turn: Record<string, unknown> | undefined): string | undefined {
+  if (!turn || !Array.isArray(turn.items)) return undefined;
+  const text: string[] = [];
+  for (const item of turn.items as Array<Record<string, unknown>>) {
+    if (item.type !== "agentMessage") continue;
+    const content = item.content;
+    if (Array.isArray(content)) {
+      for (const part of content as Array<Record<string, unknown>>) {
+        if (typeof part.text === "string") text.push(part.text);
+      }
+    } else if (typeof item.text === "string") text.push(item.text);
+  }
+  const result = text.join("\n").trim();
+  return result ? result.slice(-20_000) : undefined;
 }
 
 function nestedId(value: unknown, key: string): string | undefined {
