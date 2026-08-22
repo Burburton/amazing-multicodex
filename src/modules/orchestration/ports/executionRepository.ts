@@ -15,6 +15,16 @@ export interface PendingAgentStage {
   readonly reason: "advance" | "reviewReturn";
 }
 
+export interface AgentStageHistoryEntry {
+  readonly index: number;
+  readonly total: number;
+  readonly role: AgentRole;
+  readonly agent?: AgentExecutionRef;
+  readonly startedAt: Date;
+  readonly completedAt?: Date;
+  readonly outcome: "running" | "completed" | "failed" | "cancelled";
+}
+
 export interface TaskExecutionRecord {
   readonly id: TaskExecutionId;
   readonly taskId: TaskId;
@@ -23,6 +33,7 @@ export interface TaskExecutionRecord {
   readonly previousAgents?: readonly AgentExecutionRef[];
   readonly stage?: { readonly index: number; readonly total: number; readonly role: AgentRole };
   readonly pendingStage?: PendingAgentStage;
+  readonly stageHistory?: readonly AgentStageHistoryEntry[];
   readonly model?: string;
   readonly reviewCycles?: number;
   readonly status: TaskExecutionStatus;

@@ -2,7 +2,7 @@ import { Clock } from "../../../shared/core/clock";
 import { AppError, Result, err, ok } from "../../../shared/core/result";
 import { AgentPlanRepository, AgentRuntimePort } from "../../agents/public";
 import { TaskId, TaskLifecycleService } from "../../tasks/public";
-import { ExecutionRepository, TaskExecutionRecord } from "../ports/executionRepository";
+import { AgentStageHistoryEntry, ExecutionRepository, TaskExecutionRecord } from "../ports/executionRepository";
 
 export class RetryAgentStageWorkflow {
   constructor(private readonly tasks: TaskLifecycleService, private readonly agents: AgentRuntimePort,
@@ -31,8 +31,13 @@ export class RetryAgentStageWorkflow {
       await this.tasks.transition(taskId, "failed", "agent-stage-retry-start-failed");
       return err(startFailed(cause));
     }
+    const now = this.clock.now();
     const retried: TaskExecutionRecord = { ...current, agent,
       previousAgents: [...(current.previousAgents ?? []), ...(current.agent ? [current.agent] : [])].slice(-8),
+      stageHistory: [...closeCurrentStage(current.stageHistory, now), {
+        index: current.stage.index, total: current.stage.total, role: current.stage.role,
+        agent, startedAt: now, outcome: "running" as const
+      }].slice(-32),
       status: "running", updatedAt: this.clock.now(), version: current.version + 1 };
     const saved = await this.executions.save(retried, current.version);
     if (!saved.ok) {
@@ -47,6 +52,12 @@ export class RetryAgentStageWorkflow {
     await this.tasks.transition(taskId, "failed", "agent-stage-retry-transition-failed");
     return running;
   }
+}
+
+function closeCurrentStage(history: readonly AgentStageHistoryEntry[] | undefined, completedAt: Date): readonly AgentStageHistoryEntry[] {
+  if (!history?.length) return [];
+  return history.map((entry, index) => index === history.length - 1 && entry.outcome === "running"
+    ? { ...entry, outcome: "failed" as const, completedAt } : entry);
 }
 function notRetryable(): AppError { return { code: "agent-stage.not-retryable", category: "conflict", message: "No failed agent stage is available to retry.", retryable: false }; }
 function startFailed(cause: unknown): AppError { return { code: "agent-stage.retry-start-failed", category: "unavailable", message: "The agent stage could not be restarted.", retryable: true, cause }; }

@@ -99,6 +99,11 @@ function render(detail: TaskDetailViewModel): string {
   const prerequisites = detail.prerequisites.length
     ? `<ul>${detail.prerequisites.map(item => `<li>${escapeHtml(item.title)} <span class="badge">${escapeHtml(item.status)}</span></li>`).join("")}</ul>`
     : '<p class="muted">No prerequisites.</p>';
+  const stageHistory = detail.latestExecution?.stageHistory?.length
+    ? `<h3>Stage history</h3><ol>${detail.latestExecution.stageHistory.map(entry => {
+      const duration = (entry.completedAt ?? new Date()).getTime() - entry.startedAt.getTime();
+      return `<li><strong>${escapeHtml(roleLabel(entry.role))}</strong> · ${escapeHtml(entry.outcome)} · ${escapeHtml(formatDuration(duration))}<span class="muted"> · started ${escapeHtml(entry.startedAt.toLocaleString())}</span></li>`;
+    }).join("")}</ol>` : "";
   const execution = detail.latestExecution
     ? `<dl><dt>Status</dt><dd>${escapeHtml(detail.latestExecution.status)}</dd>${detail.latestExecution.stage ? `<dt>Agent stage</dt><dd>${escapeHtml(roleLabel(detail.latestExecution.stage.role))} · ${detail.latestExecution.stage.index + 1} of ${detail.latestExecution.stage.total}</dd><dt>Retained prior sessions</dt><dd>${detail.latestExecution.previousAgents?.length ?? 0}</dd><dt>Review cycles</dt><dd>${detail.latestExecution.reviewCycles ?? 0} of 3</dd>` : ""}${detail.latestExecution.pendingStage ? `<dt>Pending handoff</dt><dd>${escapeHtml(roleLabel(detail.latestExecution.pendingStage.role))} · stage ${detail.latestExecution.pendingStage.index + 1}${detail.latestExecution.pendingStage.reason === "reviewReturn" ? " · review revision" : ""}</dd>` : ""}<dt>Branch</dt><dd><code>${escapeHtml(detail.latestExecution.workspace.branch)}</code></dd><dt>Worktree</dt><dd><code>${escapeHtml(detail.latestExecution.workspace.path)}</code></dd></dl>`
     : '<p class="muted">No execution yet.</p>';
@@ -121,7 +126,7 @@ body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);paddin
 </style></head><body>
 <h1>${escapeHtml(task.title)}</h1><div class="meta"><span class="badge">${escapeHtml(taskStatusLabel(task.status))}</span><span>${escapeHtml(taskPriorityLabel(task.priority))} priority</span><span class="muted">Updated ${escapeHtml(task.updatedAt.toLocaleString())}</span></div>
 ${task.description ? `<p>${escapeHtml(task.description)}</p>` : ""}${statusReason}<div class="actions">${actions}</div>
-<h2>Agent pipeline</h2>${agentPlan}<h2>Acceptance criteria</h2>${criteria}<h2>Prerequisites</h2>${prerequisites}<h2>Latest execution</h2>${execution}<h2>Activity</h2>${activity}
+<h2>Agent pipeline</h2>${agentPlan}<h2>Acceptance criteria</h2>${criteria}<h2>Prerequisites</h2>${prerequisites}<h2>Latest execution</h2>${execution}${stageHistory}<h2>Activity</h2>${activity}
 <script nonce="${nonce}">const vscode=acquireVsCodeApi();const buttons=[...document.querySelectorAll('[data-action]')];buttons.forEach(button=>button.addEventListener('click',()=>{buttons.forEach(item=>item.disabled=true);vscode.postMessage({version:1,type:'action',action:button.dataset.action});}));</script>
 </body></html>`;
 }
@@ -165,6 +170,14 @@ function actionsFor(
 
 function roleLabel(role: AgentPlanProps["stages"][number]["role"]): string {
   return role[0].toUpperCase() + role.slice(1);
+}
+
+function formatDuration(milliseconds: number): string {
+  const seconds = Math.max(0, Math.round(milliseconds / 1_000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 function escapeHtml(value: string): string {

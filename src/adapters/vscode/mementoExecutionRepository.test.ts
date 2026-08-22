@@ -39,6 +39,7 @@ test("persists and resolves execution by agent identity", async () => {
     pendingStage: { index: 0, role: "implementer", objective: "Address review feedback", handoff: "Fix the edge case.", reason: "reviewReturn" },
     model: "gpt-test",
     reviewCycles: 2,
+    stageHistory: [{ index: 0, total: 2, role: "implementer", agent: { executionId: "agent-1" as ExecutionId, threadId: "thread-1" as AgentThreadId, turnId: "turn-1" as AgentTurnId }, startedAt: new Date("2026-08-15T11:00:00Z"), completedAt: new Date("2026-08-15T11:30:00Z"), outcome: "completed" as const }],
     status: "running",
     createdAt: new Date("2026-08-15T12:00:00Z"),
     updatedAt: new Date("2026-08-15T12:00:00Z"),
@@ -54,6 +55,8 @@ test("persists and resolves execution by agent identity", async () => {
   assert.equal(found.value.reviewCycles, 2);
   assert.equal(found.value.pendingStage?.reason, "reviewReturn");
   assert.equal(found.value.pendingStage?.handoff, "Fix the edge case.");
+  assert.equal(found.value.stageHistory?.[0]?.outcome, "completed");
+  assert.equal(found.value.stageHistory?.[0]?.startedAt instanceof Date, true);
   assert.equal(found.value.createdAt instanceof Date, true);
 });
 

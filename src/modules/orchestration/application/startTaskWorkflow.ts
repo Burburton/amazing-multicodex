@@ -101,7 +101,10 @@ export class StartTaskWorkflow {
         cwd: prepared.value.path,
         model: command.model
       });
-      execution = { ...execution, agent, status: "running", updatedAt: this.clock.now(), version: 1 };
+      execution = { ...execution, agent, status: "running", stageHistory: [{
+        index: 0, total: stages.length, role: firstStage.role, agent,
+        startedAt: this.clock.now(), outcome: "running"
+      }], updatedAt: this.clock.now(), version: 1 };
       const updated = await this.executions.save(execution, 0);
       if (!updated.ok) {
         let interruption: AppError | undefined;

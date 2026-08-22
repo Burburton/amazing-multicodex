@@ -47,6 +47,12 @@ replace the current agent binding. Recovery replays a remaining checkpoint into
 a new session in the same worktree, so a host exit cannot silently resume the
 completed source stage or lose reviewer feedback.
 
+Each execution also keeps a bounded stage history (at most 32 entries). Every
+entry records the role, Codex session identity, start and completion timestamps,
+and terminal outcome. This history is persisted as part of the execution record
+and projected in task details, making slow or failed pipeline stages visible
+without inspecting raw runtime logs.
+
 ## 1. Purpose
 
 Amazing MultiCodex is a VS Code control plane for coordinating multiple Codex

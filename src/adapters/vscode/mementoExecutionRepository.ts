@@ -3,6 +3,7 @@ import { KeyValueState } from "../../shared/ports/keyValueState";
 import { AgentExecutionRef } from "../../modules/agents/public";
 import {
   ExecutionRepository,
+  AgentStageHistoryEntry,
   TaskExecutionId,
   TaskExecutionRecord
 } from "../../modules/orchestration/public";
@@ -18,6 +19,11 @@ interface StoredExecution {
   readonly previousAgents?: readonly AgentExecutionRef[];
   readonly stage?: TaskExecutionRecord["stage"];
   readonly pendingStage?: TaskExecutionRecord["pendingStage"];
+  readonly stageHistory?: readonly {
+    readonly index: number; readonly total: number; readonly role: AgentStageHistoryEntry["role"];
+    readonly agent?: AgentExecutionRef; readonly startedAt: string; readonly completedAt?: string;
+    readonly outcome: AgentStageHistoryEntry["outcome"];
+  }[];
   readonly model?: string;
   readonly reviewCycles?: number;
   readonly status: TaskExecutionRecord["status"];
@@ -157,6 +163,7 @@ function isStoredExecution(value: unknown): value is StoredExecution {
   const previousAgents = execution.previousAgents as Array<Record<string, unknown>> | undefined;
   const stage = execution.stage as Record<string, unknown> | undefined;
   const pendingStage = execution.pendingStage as Record<string, unknown> | undefined;
+  const stageHistory = execution.stageHistory as Array<Record<string, unknown>> | undefined;
   return boundedString(execution.id, 1_000)
     && boundedString(execution.taskId, 1_000)
     && !!workspace && boundedString(workspace.id, 1_000)
@@ -178,6 +185,13 @@ function isStoredExecution(value: unknown): value is StoredExecution {
       && boundedString(pendingStage.objective, 2_000)
       && (pendingStage.handoff === undefined || (typeof pendingStage.handoff === "string" && pendingStage.handoff.length <= 20_000))
       && ["advance", "reviewReturn"].includes(String(pendingStage.reason))))
+    && (stageHistory === undefined || (Array.isArray(stageHistory) && stageHistory.length <= 32 && stageHistory.every(item =>
+      Number.isInteger(item.index) && Number(item.index) >= 0 && Number.isInteger(item.total) && Number(item.total) >= 1
+      && Number(item.index) < Number(item.total) && ["planner", "implementer", "reviewer", "tester"].includes(String(item.role))
+      && (item.agent === undefined || (() => { const value = item.agent as Record<string, unknown>; return boundedString(value.executionId, 4_096) && boundedString(value.threadId, 4_096) && boundedString(value.turnId, 4_096); })())
+      && typeof item.startedAt === "string" && !Number.isNaN(Date.parse(item.startedAt))
+      && (item.completedAt === undefined || (typeof item.completedAt === "string" && !Number.isNaN(Date.parse(item.completedAt))))
+      && ["running", "completed", "failed", "cancelled"].includes(String(item.outcome)))))
     && (execution.model === undefined || (typeof execution.model === "string" && execution.model.length > 0 && execution.model.length <= 500))
     && (execution.reviewCycles === undefined || (Number.isInteger(execution.reviewCycles) && Number(execution.reviewCycles) >= 0 && Number(execution.reviewCycles) <= 3))
     && ["prepared", "running", "completed", "failed", "cancelled"].includes(String(execution.status))
@@ -213,21 +227,34 @@ function hasConsistentAssociations(records: readonly StoredExecution[]): boolean
 }
 
 function toStored(record: TaskExecutionRecord): StoredExecution {
+  const { stageHistory, ...base } = record;
   return {
-    ...record,
+    ...base,
+    ...(stageHistory ? { stageHistory: stageHistory.map(entry => ({
+      index: entry.index, total: entry.total, role: entry.role, agent: entry.agent, outcome: entry.outcome,
+      startedAt: entry.startedAt.toISOString(),
+      ...(entry.completedAt ? { completedAt: entry.completedAt.toISOString() } : {})
+    })) } : {}),
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString()
   };
 }
 
 function toDomainOptional(record: StoredExecution | undefined): TaskExecutionRecord | undefined {
-  return record ? {
-    ...record,
+  if (!record) return undefined;
+  const { stageHistory, ...base } = record;
+  return {
+    ...base,
+    ...(stageHistory ? { stageHistory: stageHistory.map(entry => ({
+      index: entry.index, total: entry.total, role: entry.role, agent: entry.agent, outcome: entry.outcome,
+      startedAt: new Date(entry.startedAt),
+      ...(entry.completedAt ? { completedAt: new Date(entry.completedAt) } : {})
+    })) } : {}),
     id: record.id as TaskExecutionId,
     taskId: record.taskId as TaskId,
     createdAt: new Date(record.createdAt),
     updatedAt: new Date(record.updatedAt)
-  } : undefined;
+  };
 }
 
 function conflict(id: TaskExecutionId, expected: number, actual: number): AppError {

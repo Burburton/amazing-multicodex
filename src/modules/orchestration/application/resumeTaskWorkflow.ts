@@ -1,8 +1,8 @@
 import { Clock } from "../../../shared/core/clock";
 import { AppError, Result, err, ok } from "../../../shared/core/result";
-import { AgentRuntimePort } from "../../agents/public";
+import { AgentExecutionRef, AgentRuntimePort } from "../../agents/public";
 import { TaskId, TaskLifecycleService } from "../../tasks/public";
-import { ExecutionRepository, TaskExecutionRecord } from "../ports/executionRepository";
+import { AgentStageHistoryEntry, ExecutionRepository, TaskExecutionRecord } from "../ports/executionRepository";
 import { pendingStagePrompt } from "./agentStagePrompt";
 
 export interface ResumeTaskWorkflowCommand {
@@ -41,6 +41,7 @@ export class ResumeTaskWorkflow {
             cwd: execution.workspace.path
           });
       const { pendingStage: _recoveredCheckpoint, ...executionBase } = execution;
+      const now = this.clock.now();
       const updated: TaskExecutionRecord = {
         ...executionBase,
         agent,
@@ -50,6 +51,12 @@ export class ResumeTaskWorkflow {
         stage: pendingStage
           ? { index: pendingStage.index, total: execution.stage?.total ?? pendingStage.index + 1, role: pendingStage.role }
           : execution.stage,
+        stageHistory: pendingStage
+          ? [...closeCurrentStage(execution.stageHistory, now), {
+              index: pendingStage.index, total: execution.stage?.total ?? pendingStage.index + 1,
+              role: pendingStage.role, agent, startedAt: now, outcome: "running" as const
+            }].slice(-32)
+          : refreshCurrentStage(execution.stageHistory, agent),
         reviewCycles: pendingStage?.reason === "reviewReturn"
           ? (execution.reviewCycles ?? 0) + 1
           : execution.reviewCycles,
@@ -71,6 +78,17 @@ export class ResumeTaskWorkflow {
       return err(resumeFailed(cause));
     }
   }
+}
+
+function closeCurrentStage(history: readonly AgentStageHistoryEntry[] | undefined, completedAt: Date): readonly AgentStageHistoryEntry[] {
+  if (!history?.length) return [];
+  return history.map((entry, index) => index === history.length - 1 && entry.outcome === "running"
+    ? { ...entry, outcome: "completed" as const, completedAt } : entry);
+}
+
+function refreshCurrentStage(history: readonly AgentStageHistoryEntry[] | undefined, agent: AgentExecutionRef): readonly AgentStageHistoryEntry[] | undefined {
+  if (!history?.length) return history;
+  return history.map((entry, index) => index === history.length - 1 ? { ...entry, agent, outcome: "running" as const, completedAt: undefined } : entry);
 }
 
 function notRunning(taskId: TaskId, status: string): AppError {

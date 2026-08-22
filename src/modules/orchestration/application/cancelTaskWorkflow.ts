@@ -2,7 +2,7 @@ import { Clock } from "../../../shared/core/clock";
 import { AppError, Result, err, ok } from "../../../shared/core/result";
 import { AgentRuntimePort } from "../../agents/public";
 import { TaskId, TaskLifecycleService } from "../../tasks/public";
-import { ExecutionRepository, TaskExecutionRecord } from "../ports/executionRepository";
+import { AgentStageHistoryEntry, ExecutionRepository, TaskExecutionRecord } from "../ports/executionRepository";
 
 export class CancelTaskWorkflow {
   constructor(
@@ -36,10 +36,12 @@ export class CancelTaskWorkflow {
         return err(interruptFailed(cause));
       }
     }
+    const now = this.clock.now();
     const cancelled: TaskExecutionRecord = {
       ...active.value,
       status: "cancelled",
-      updatedAt: this.clock.now(),
+      stageHistory: closeCurrentStage(active.value.stageHistory, now),
+      updatedAt: now,
       version: active.value.version + 1
     };
     const saved = await this.executions.save(cancelled, active.value.version);
@@ -47,6 +49,12 @@ export class CancelTaskWorkflow {
     const transitioned = await this.tasks.transition(taskId, "cancelled", "user-requested");
     return transitioned.ok ? ok(cancelled) : transitioned;
   }
+}
+
+function closeCurrentStage(history: readonly AgentStageHistoryEntry[] | undefined, completedAt: Date): readonly AgentStageHistoryEntry[] | undefined {
+  if (!history?.length) return history;
+  return history.map((entry, index) => index === history.length - 1 && entry.outcome === "running"
+    ? { ...entry, outcome: "cancelled" as const, completedAt } : entry);
 }
 
 function notCancellable(taskId: TaskId, status: string): AppError {

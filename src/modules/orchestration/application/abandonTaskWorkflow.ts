@@ -1,7 +1,7 @@
 import { Clock } from "../../../shared/core/clock";
 import { AppError, Result, err, ok } from "../../../shared/core/result";
 import { TaskId, TaskLifecycleService } from "../../tasks/public";
-import { ExecutionRepository, TaskExecutionRecord } from "../ports/executionRepository";
+import { AgentStageHistoryEntry, ExecutionRepository, TaskExecutionRecord } from "../ports/executionRepository";
 
 export class AbandonTaskWorkflow {
   constructor(
@@ -27,10 +27,12 @@ export class AbandonTaskWorkflow {
       }
       return err(activeExecutionNotFound(taskId));
     }
+    const now = this.clock.now();
     const cancelled: TaskExecutionRecord = {
       ...execution.value,
       status: "cancelled",
-      updatedAt: this.clock.now(),
+      stageHistory: closeCurrentStage(execution.value.stageHistory, now),
+      updatedAt: now,
       version: execution.value.version + 1
     };
     const saved = await this.executions.save(cancelled, execution.value.version);
@@ -38,6 +40,12 @@ export class AbandonTaskWorkflow {
     const transitioned = await this.tasks.transition(taskId, "cancelled", "user-abandoned-offline");
     return transitioned.ok ? ok(undefined) : transitioned;
   }
+}
+
+function closeCurrentStage(history: readonly AgentStageHistoryEntry[] | undefined, completedAt: Date): readonly AgentStageHistoryEntry[] | undefined {
+  if (!history?.length) return history;
+  return history.map((entry, index) => index === history.length - 1 && entry.outcome === "running"
+    ? { ...entry, outcome: "cancelled" as const, completedAt } : entry);
 }
 
 function notAbandonable(taskId: TaskId, status: string): AppError {

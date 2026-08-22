@@ -125,6 +125,11 @@ Code exits in that small transition window, task details show the pending role
 and `Reconnect / Resume` starts that exact stage instead of resuming the already
 completed prior turn.
 
+Task details also show the execution stage history. For each role you can see
+the Codex session, start time, elapsed duration, and outcome (`running`,
+`completed`, `failed`, or `cancelled`), including stages from earlier retries
+and review loops.
+
 The normal task flow is:
 
 1. Create a task, choose its project, and, if needed, edit the draft with a

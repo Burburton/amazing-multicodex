@@ -32,5 +32,6 @@ export type {
   TaskExecutionId,
   TaskExecutionRecord,
   TaskExecutionStatus,
-  PendingAgentStage
+  PendingAgentStage,
+  AgentStageHistoryEntry
 } from "./ports/executionRepository";

@@ -1,7 +1,7 @@
 import { Clock } from "../../../shared/core/clock";
 import { AgentPlanRepository, AgentRuntimeEvent, AgentRuntimePort, AgentRuntimeSnapshot } from "../../agents/public";
 import { TaskLifecycleService } from "../../tasks/public";
-import { ExecutionRepository, PendingAgentStage, TaskExecutionRecord } from "../ports/executionRepository";
+import { AgentStageHistoryEntry, ExecutionRepository, PendingAgentStage, TaskExecutionRecord } from "../ports/executionRepository";
 import { pendingStagePrompt } from "./agentStagePrompt";
 
 export interface CoordinatorDiagnostics {
@@ -96,6 +96,7 @@ export class AgentEventCoordinator {
     const updated: TaskExecutionRecord = {
       ...found.value,
       status: success ? "completed" : event.status === "interrupted" ? "cancelled" : "failed",
+      stageHistory: closeCurrentStage(found.value.stageHistory, success ? "completed" : event.status === "interrupted" ? "cancelled" : "failed", this.clock.now()),
       updatedAt: this.clock.now(),
       version: found.value.version + 1
     };
@@ -151,6 +152,10 @@ export class AgentEventCoordinator {
       agent,
       previousAgents: [...(checkpoint.previousAgents ?? []), ...(checkpoint.agent ? [checkpoint.agent] : [])].slice(-8),
       stage: { index: pendingStage.index, total: checkpoint.stage?.total ?? pendingStage.index + 1, role: pendingStage.role },
+      stageHistory: advanceStageHistory(checkpoint.stageHistory, {
+        index: pendingStage.index, total: checkpoint.stage?.total ?? pendingStage.index + 1,
+        role: pendingStage.role, agent, startedAt: this.clock.now(), outcome: "running"
+      }, this.clock.now()),
       reviewCycles,
       updatedAt: this.clock.now(),
       version: checkpoint.version + 1
@@ -174,7 +179,7 @@ export class AgentEventCoordinator {
   private async failStage(execution: TaskExecutionRecord, reason: string, cause?: unknown): Promise<void> {
     const { pendingStage: _pendingStage, ...executionBase } = execution;
     const saved = await this.executions.save({
-      ...executionBase, status: "failed", updatedAt: this.clock.now(), version: execution.version + 1
+      ...executionBase, status: "failed", stageHistory: closeCurrentStage(execution.stageHistory, "failed", this.clock.now()), updatedAt: this.clock.now(), version: execution.version + 1
     }, execution.version);
     if (!saved.ok) this.diagnostics.error("Could not persist failed agent stage.", saved.error);
     const transitioned = await this.tasks.transition(execution.taskId, "failed", reason);
@@ -182,6 +187,25 @@ export class AgentEventCoordinator {
     else this.diagnostics.taskChanged?.(execution.taskId, false);
     this.diagnostics.error("Agent pipeline stage failed.", cause);
   }
+}
+
+function closeCurrentStage(
+  history: readonly AgentStageHistoryEntry[] | undefined,
+  outcome: AgentStageHistoryEntry["outcome"],
+  completedAt: Date
+): readonly AgentStageHistoryEntry[] | undefined {
+  if (!history?.length) return history;
+  return history.map((entry, index) => index === history.length - 1 && entry.outcome === "running"
+    ? { ...entry, outcome, completedAt } : entry);
+}
+
+function advanceStageHistory(
+  history: readonly AgentStageHistoryEntry[] | undefined,
+  next: AgentStageHistoryEntry,
+  completedAt: Date
+): readonly AgentStageHistoryEntry[] {
+  const closed = closeCurrentStage(history, "completed", completedAt) ?? [];
+  return [...closed, next].slice(-32);
 }
 
 function requestsChanges(handoff: string | undefined): boolean {
