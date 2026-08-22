@@ -5,6 +5,7 @@ export interface SqliteDatabase {
   exec(sql: string): void;
   run(sql: string, parameters?: readonly unknown[]): void;
   query<T extends Record<string, unknown>>(sql: string, parameters?: readonly unknown[]): readonly T[];
+  transaction<T>(work: () => T): T;
 }
 
 export interface SqliteMigration {

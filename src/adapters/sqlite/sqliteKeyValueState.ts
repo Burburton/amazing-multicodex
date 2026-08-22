@@ -58,4 +58,9 @@ class DatabaseAdapter {
   query<T extends Record<string, unknown>>(sql: string, parameters: readonly unknown[] = []): readonly T[] {
     return this.database.prepare(sql).all(...parameters as any[]) as T[];
   }
+  transaction<T>(work: () => T): T {
+    this.database.exec("BEGIN IMMEDIATE");
+    try { const value = work(); this.database.exec("COMMIT"); return value; }
+    catch (cause) { this.database.exec("ROLLBACK"); throw cause; }
+  }
 }

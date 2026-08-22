@@ -8,6 +8,7 @@ class FakeDatabase implements SqliteDatabase {
   versions: number[] = [];
   exec(sql: string): void { this.statements.push(sql); }
   run(sql: string): void { this.statements.push(sql); }
+  transaction<T>(work: () => T): T { return work(); }
   query<T extends Record<string, unknown>>(): readonly T[] { return this.versions.map(version => ({ version } as unknown as T)); }
 }
 

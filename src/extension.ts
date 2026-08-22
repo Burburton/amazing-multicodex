@@ -73,7 +73,7 @@ import { TaskDeletionRepository, TaskRepository } from "./modules/tasks/public";
 import { ActivityDeletionRepository, ActivityRepository } from "./modules/activity/public";
 import { ApprovalDeletionRepository, ApprovalRepository } from "./modules/approvals/public";
 import { ExecutionDeletionRepository, ExecutionRepository } from "./modules/orchestration/public";
-import { KeyValueOutboxRepository, OutboxService } from "./modules/outbox/public";
+import { KeyValueOutboxRepository, OutboxDispatcher, OutboxService } from "./modules/outbox/public";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const connectedTasks = new Set<TaskProps["id"]>();
@@ -107,6 +107,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const clock = new SystemClock();
   const ids = new CryptoIdGenerator();
   const outbox = new OutboxService(new KeyValueOutboxRepository(persistentState), clock, ids);
+  const outboxDispatcher = new OutboxDispatcher(outbox, async event => {
+    if (event.aggregateType === "task" || event.aggregateType === "approval") refreshViews();
+  });
+  outboxDispatcher.start();
+  context.subscriptions.push({ dispose: () => outboxDispatcher.stop() });
   const projectRepository = new MementoProjectRepository(persistentState);
   const projectService = new ProjectService(projectRepository, clock, new CryptoIdGenerator());
   const createTask = new CreateTaskHandler(repository, clock, new CryptoIdGenerator());
