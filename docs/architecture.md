@@ -12,8 +12,9 @@ by `scripts/check-architecture.js` in `npm run check`.
 
 Persistence currently uses validated VS Code `workspaceState` adapters behind
 repository ports, with optimistic versions and serialized read-modify-write
-operations. This is an intentional transitional implementation, not a change
-to the SQLite decision in section 10. Lifecycle-driven dispatch, restart
+operations. The SQLite migration port and versioned core schema are now defined
+alongside the adapters; switching the host wiring remains the next persistence
+step. Lifecycle-driven dispatch, restart
 reconciliation, safe workspace cleanup, and a reusable task-detail webview are
 implemented. The current presentation includes a hierarchical Explorer tree
 (`Project -> Tasks`), searchable project dashboards grouped by operator intent,
@@ -23,7 +24,9 @@ actionable readiness report, and a live-refreshing detail/activity panel.
 External protocol lines, process output, persisted records, approval payloads,
 and user-visible vendor errors have explicit size and redaction boundaries.
 Approval requests and decisions are projected into the task activity timeline;
-transactional persistence/outbox remains a future increment.
+transactional persistence/outbox is represented by the versioned SQLite schema
+and an outbox service with retry-safe delivery semantics; wiring every workflow
+to publish events remains a future increment.
 
 The approval inbox projection is now available as a cross-project command. It
 reads pending approvals through the approvals port and routes each selection

@@ -47,7 +47,8 @@ The extension currently provides the core multi-task execution loop:
 Codex remains responsible for reasoning and code changes. This extension owns
 coordination, worktrees, approvals, persistence, and observability. Execution
 state currently uses VS Code workspace storage behind repository ports; the
-planned SQLite adapter can replace it without changing the domain modules.
+versioned SQLite schema, migration port, and outbox service are now defined so
+the host can switch persistence without changing domain modules.
 
 ## Direction
 
