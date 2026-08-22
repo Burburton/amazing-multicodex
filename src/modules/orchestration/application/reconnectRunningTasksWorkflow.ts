@@ -20,7 +20,7 @@ export class ReconnectRunningTasksWorkflow {
     private readonly clock: Clock
   ) {}
 
-  async execute(connected: ReadonlySet<TaskId> = new Set()): Promise<Result<ReconnectRunningTasksReport>> {
+  async execute(connected: ReadonlySet<TaskId> = new Set(), only?: ReadonlySet<TaskId>): Promise<Result<ReconnectRunningTasksReport>> {
     const listed = await this.tasks.list();
     if (!listed.ok) return listed;
     const resumed: TaskId[] = [];
@@ -30,6 +30,7 @@ export class ReconnectRunningTasksWorkflow {
     for (const task of listed.value) {
       const snapshot = task.snapshot();
       if (snapshot.status !== "running") continue;
+      if (only && !only.has(snapshot.id)) continue;
       if (connected.has(snapshot.id)) {
         skipped.push(snapshot.id);
         continue;

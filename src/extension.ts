@@ -153,7 +153,47 @@ export function activate(context: vscode.ExtensionContext): void {
         task.projectId === projectId || (includeLegacy && task.projectId === undefined)
       )) : [];
     },
-    taskId => taskDetails.show(taskId)
+    taskId => taskDetails.show(taskId),
+    async (action, taskIds) => {
+      if (action === "cancel") {
+        const confirmed = await vscode.window.showWarningMessage(
+          `Cancel ${taskIds.length} selected running task(s)?`, { modal: true }, "Cancel Tasks"
+        );
+        if (confirmed !== "Cancel Tasks") return;
+        let agent = boundAgent;
+        if (!agent) {
+          const projects = await projectService.list();
+          const settings = readSettings();
+          if (!projects.ok || projects.value.length === 0 || !settings.ok) {
+            void vscode.window.showErrorMessage(!projects.ok ? projects.error.message : !settings.ok ? settings.error.message : "Add a project before cancelling tasks.");
+            return;
+          }
+          agent = await codex.start({ cwd: projects.value[0].repositoryRoot, executable: settings.value.codexExecutable, requestTimeoutMs: settings.value.requestTimeoutMs });
+          await bindAgent(agent, settings.value.maxActivityCharacters);
+        }
+        const results = await Promise.all(taskIds.map(taskId => new CancelTaskWorkflow(
+          lifecycle, agent!, executions, clock
+        ).execute(taskId)));
+        const failed = results.filter(result => !result.ok).length;
+        taskIds.forEach(taskId => connectedTasks.delete(taskId));
+        refreshViews();
+        if (failed) void vscode.window.showWarningMessage(`Cancelled ${taskIds.length - failed} task(s); ${failed} could not be cancelled.`);
+        return;
+      }
+      const projects = await projectService.list();
+      if (!projects.ok || projects.value.length === 0) { void vscode.window.showErrorMessage("Add a project before reconnecting tasks."); return; }
+      const settings = readSettings();
+      if (!settings.ok) { void vscode.window.showErrorMessage(settings.error.message); return; }
+      const agent = await codex.start({ cwd: projects.value[0].repositoryRoot, executable: settings.value.codexExecutable, requestTimeoutMs: settings.value.requestTimeoutMs });
+      const alreadyConnected = boundAgent === agent ? new Set(connectedTasks) : new Set<TaskProps["id"]>();
+      await bindAgent(agent, settings.value.maxActivityCharacters);
+      const report = await new ReconnectRunningTasksWorkflow(repository, lifecycle, agent, executions, clock)
+        .execute(alreadyConnected, new Set(taskIds));
+      if (!report.ok) { void vscode.window.showErrorMessage(report.error.message); return; }
+      report.value.resumed.forEach(taskId => connectedTasks.add(taskId));
+      refreshViews();
+      if (report.value.failed.length) void vscode.window.showWarningMessage(`Reconnected ${report.value.resumed.length}; ${report.value.failed.length} selected task(s) failed.`);
+    }
   );
   const projectsReady = ensureWorkspaceProjects();
   let coordinator: AgentEventCoordinator | undefined;

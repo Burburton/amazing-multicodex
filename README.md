@@ -143,6 +143,10 @@ Tasks` from the Command Palette. It opens one Codex connection, resumes each
 disconnected task in its own persisted worktree, skips tasks already connected,
 and reports individual failures without stopping the rest.
 
+From a project detail panel, select multiple task rows to reconnect or cancel
+them together. Cancellation requires confirmation and reports partial failures;
+selection is limited to the currently loaded project tasks.
+
 After a Codex connection is established, MultiCodex also queries each persisted
 thread with `thread/read`. If a turn completed while VS Code was disconnected,
 the stored turn result and handoff are replayed through the normal pipeline, so
