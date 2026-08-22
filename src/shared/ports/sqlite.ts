@@ -3,6 +3,7 @@ import { Result, err, ok } from "../core/result";
 /** Minimal driver surface so the domain never depends on a SQLite vendor. */
 export interface SqliteDatabase {
   exec(sql: string): void;
+  run(sql: string, parameters?: readonly unknown[]): void;
   query<T extends Record<string, unknown>>(sql: string, parameters?: readonly unknown[]): readonly T[];
 }
 
