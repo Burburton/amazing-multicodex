@@ -1,0 +1,30 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SqliteKeyValueState } from "./sqliteKeyValueState";
+import { SqliteExecutionRepository } from "./sqliteExecutionRepository";
+import { SqliteTaskRepository } from "./sqliteTaskRepository";
+import { Task } from "../../modules/tasks/public";
+import { TaskExecutionId } from "../../modules/orchestration/public";
+import { ExecutionId } from "../../modules/agents/public";
+import { TaskId } from "../../modules/tasks/public";
+import { WorkspaceId } from "../../modules/workspaces/public";
+
+test("round-trips execution identity and stage history through SQLite", async () => {
+  const root = mkdtempSync(join(tmpdir(), "amazing-multicodex-execution-"));
+  const state = new SqliteKeyValueState(join(root, "state.db"));
+  const repository = new SqliteExecutionRepository(state.databasePort());
+  const tasks = new SqliteTaskRepository(state.databasePort());
+  const task = Task.create({ id: "task-1" as TaskId, title: "Task", now: new Date("2026-08-21T00:00:00Z") });
+  assert.equal(task.ok, true);
+  if (task.ok) await tasks.save(task.value, -1);
+  const now = new Date("2026-08-21T00:00:00Z");
+  const record = { id: "execution-1" as TaskExecutionId, taskId: "task-1" as TaskId, workspace: { id: "workspace-1" as WorkspaceId, taskId: "task-1" as TaskId, repositoryRoot: "/repo", worktreeRoot: "/worktrees", path: "/worktrees/one", branch: "branch", baseRef: "HEAD" }, agent: { executionId: "agent-1" as ExecutionId, threadId: "thread-1" as never, turnId: "turn-1" as never }, status: "running" as const, createdAt: now, updatedAt: now, version: 0, stageHistory: [{ index: 0, total: 1, role: "implementer" as const, startedAt: now, outcome: "running" as const }] };
+  assert.equal((await repository.save(record, -1)).ok, true);
+  const found = await repository.findByAgent("thread-1" as never, "turn-1" as never);
+  assert.equal(found.ok && found.value?.stageHistory?.[0]?.startedAt instanceof Date, true);
+  state.close();
+  rmSync(root, { recursive: true, force: true });
+});
