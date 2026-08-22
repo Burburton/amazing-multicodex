@@ -131,7 +131,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   const approvalRepository = new MementoApprovalRepository(persistentState);
   const approvals = new ApprovalService(
-    approvalRepository, clock, ids
+    approvalRepository, clock, ids, outbox
   );
   const taskDetailQuery = new TaskDetailQuery(lifecycle, dependencies, executions, activity);
   const detailCommands: Readonly<Record<TaskDetailAction, string>> = {

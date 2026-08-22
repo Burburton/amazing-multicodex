@@ -6,6 +6,7 @@ import { AgentApprovalRequest } from "../../agents/public";
 import { TaskId } from "../../tasks/public";
 import { Approval, ApprovalId, ApprovalProps, ApprovalRisk, ApprovalStatus } from "../domain/approval";
 import { ApprovalRepository } from "../ports/approvalRepository";
+import { OutboxService } from "../../outbox/public";
 
 export interface CaptureApprovalCommand {
   readonly taskId: TaskId;
@@ -25,7 +26,8 @@ export class ApprovalService {
   constructor(
     private readonly repository: ApprovalRepository,
     private readonly clock: Clock,
-    private readonly ids: IdGenerator
+    private readonly ids: IdGenerator,
+    private readonly outbox?: OutboxService
   ) {}
 
   async listPending(): Promise<Result<readonly ApprovalProps[]>> {
@@ -51,6 +53,10 @@ export class ApprovalService {
     if (!created.ok) return created;
     const saved = await this.repository.save(created.value, -1);
     if (!saved.ok) return saved;
+    if (this.outbox) {
+      const published = await this.outbox.publish({ aggregateType: "approval", aggregateId: created.value.snapshot().id, eventType: "approval.created", payload: { taskId: command.taskId, risk: command.risk } });
+      if (!published.ok) return published;
+    }
     return { ok: true, value: created.value.snapshot() };
   }
 
@@ -64,6 +70,10 @@ export class ApprovalService {
     if (!decided.ok) return decided;
     const saved = await this.repository.save(approval, before);
     if (!saved.ok) return saved;
+    if (this.outbox) {
+      const published = await this.outbox.publish({ aggregateType: "approval", aggregateId: command.approvalId, eventType: "approval.decided", payload: { taskId: approval.snapshot().taskId, status: approval.snapshot().status } });
+      if (!published.ok) return published;
+    }
     return { ok: true, value: approval.snapshot() };
   }
 }
