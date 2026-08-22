@@ -1166,6 +1166,33 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       void vscode.window.showInformationMessage(`Released worktree for: ${task.title}`);
     }),
+    vscode.commands.registerCommand("amazingMultiCodex.deleteTaskBranch", async (task?: TaskProps) => {
+      task = await selectTask(task, candidate => ["completed", "cancelled"].includes(candidate.status), "Delete a retained task branch");
+      if (!task) return;
+      const execution = await executions.findLatestByTask(task.id);
+      if (!execution.ok || !execution.value || !gitWorkspaces.deleteBranch) {
+        void vscode.window.showErrorMessage(execution.ok ? "This task has no branch cleanup capability." : execution.error.message);
+        return;
+      }
+      const inspected = await gitWorkspaces.inspect(execution.value.workspace);
+      if (inspected.ok) {
+        void vscode.window.showWarningMessage("Release the task worktree before deleting its retained branch.");
+        return;
+      }
+      const confirmed = await vscode.window.showWarningMessage(
+        `Delete retained branch '${execution.value.workspace.branch}' for '${task.title}'?`,
+        { modal: true }, "Delete Branch"
+      );
+      if (confirmed !== "Delete Branch") return;
+      let deleted = await gitWorkspaces.deleteBranch({ repositoryRoot: execution.value.workspace.repositoryRoot, branch: execution.value.workspace.branch, force: false });
+      if (!deleted.ok) {
+        const force = await vscode.window.showWarningMessage("Git could not delete the branch cleanly. Force delete it?", { modal: true }, "Force Delete Branch");
+        if (force !== "Force Delete Branch") return;
+        deleted = await gitWorkspaces.deleteBranch({ repositoryRoot: execution.value.workspace.repositoryRoot, branch: execution.value.workspace.branch, force: true });
+      }
+      if (!deleted.ok) { void vscode.window.showErrorMessage(deleted.error.message); return; }
+      void vscode.window.showInformationMessage(`Deleted retained branch for: ${task.title}`);
+    }),
     vscode.commands.registerCommand("amazingMultiCodex.deleteTask", async (task?: TaskProps) => {
       task = await selectTask(task, candidate => [
         "draft", "readyForReview", "completed", "blocked", "failed", "cancelled", "deleting"

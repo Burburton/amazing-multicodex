@@ -64,6 +64,7 @@
     "onCommand:amazingMultiCodex.addDependency",
     "onCommand:amazingMultiCodex.removeDependency",
     "onCommand:amazingMultiCodex.releaseWorkspace",
+    "onCommand:amazingMultiCodex.deleteTaskBranch",
     "onCommand:amazingMultiCodex.deleteTask"
   ],
   "main": "./out/extension.js",
@@ -324,6 +325,11 @@
       {
         "command": "amazingMultiCodex.releaseWorkspace",
         "title": "MultiCodex: Release Worktree",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "amazingMultiCodex.deleteTaskBranch",
+        "title": "MultiCodex: Delete Retained Task Branch",
         "icon": "$(trash)"
       },
       {
